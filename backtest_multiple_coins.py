@@ -19,11 +19,21 @@ import numpy as np
     '''
 
 # constants
-QUERI_POLONIEX = False
+QUERI_POLONIEX = True
 BACKTEST_DATA_FILE = './price_data.csv'
-COIN1 = 'USDT'
-COIN2 = 'BTC'
-PAIR = COIN1 + '_' + COIN2
+TETHER = 'USDT'
+COINS = [
+    'BTC',
+    'ETH',
+    'XRP',
+    'LTC',
+    'ZEC',
+    'XMR',
+    'STR',
+    'DASH',
+    'ETC',
+]
+PAIRS = [TETHER + '_' + coin for coin in COINS]
 TRADING_FEE = 0.0025
 
 # pprint constants
@@ -91,7 +101,6 @@ def poloniex_server():
 
     return poloniex(API_KEY, SECRET_KEY)
 
-
 # get backtesting data
 def get_past_prices_from_poloniex(
     startTime, endTime, period, num_periods, conn):
@@ -100,23 +109,33 @@ def get_past_prices_from_poloniex(
     startTime_unix = time.mktime(startTime.timetuple())
     endTime_unix = time.mktime(endTime.timetuple())
 
-    # get history data of this currency into the dictionary
-    prices = conn.api_query("returnChartData", {
-            'currencyPair': PAIR,
+    # get price history data for each pair into a dictionary
+    dct = { pair :
+        conn.api_query("returnChartData", {
+            'currencyPair': pair,
             'start': startTime_unix,
             'end': endTime_unix,
             'period': period
-        })
+        }) for pair in PAIRS}
 
-    prices2 = []
-    for t in num_periods:  # remove unneeded data
-        price = prices[t]['close']
-        prices2.append({'date': prices[t]['date'], 'price': price})
+    # create 'unix_date' and 'datetime' columns
+    df = pd.DataFrame()
+    dates = [dct[PAIRS[0]][t]['date'] for t in num_periods]
+    df['unix_date'] = pd.Series(dates)
+    df['datetime'] = df['unix_date'].apply(
+        lambda unix_timestamp : \
+        datetime.fromtimestamp(unix_timestamp))
 
-    prices3 = pd.DataFrame(prices2)
-    prices3.to_csv(BACKTEST_DATA_FILE)
+    # remove unneeded data
+    for pair, data in dct.items():
+        coin = pair[len(TETHER + '_'):]
+        data2 = [data[t]['close'] for t in num_periods]
+        df[coin] = pd.Series(data2)
 
-    return prices3
+    # save df to file
+    df.to_csv(BACKTEST_DATA_FILE)
+
+    return df
 
 def get_past_prices_from_csv_file():
 
@@ -129,8 +148,8 @@ if __name__ == '__main__':
     conn = poloniex_server()
 
     # variables
-    startTime = datetime(2018, 3, 1,  0, 0, 0)  # year, month, day, hour, minute, second
-    endTime   = datetime(2019, 5, 30, 0, 0, 0)
+    startTime = datetime(2018, 8, 1, 0, 0, 0)  # year, month, day, hour, minute, second
+    endTime   = datetime(2019, 8, 1, 0, 0, 0)
     # period = duration of time steps between rebalances
     #   300 s   900 s    1800 s   7200 s   14400 s   86400 s
     #   5 min   15 min   30 min   2 hrs    4 hrs     1 day
@@ -140,23 +159,13 @@ if __name__ == '__main__':
     num_periods = range(int((endTime - startTime).total_seconds() / period))
 
     # import backtest data of COIN1 and COIN2 pair
-    prices = \
-        get_past_prices_from_poloniex(startTime, endTime, period, num_periods, conn) \
+    df = get_past_prices_from_poloniex(startTime, endTime, period, num_periods, conn) \
         if QUERI_POLONIEX else get_past_prices_from_csv_file()
 
-    # convert 'date' column from unix timestamp to datetime
-    prices['date'] = prices['date'].apply(
-        lambda unix_timestamp : datetime.fromtimestamp(unix_timestamp))
+    # iterate over data
+    for i, row in df.iterrows():
+        print(i, row)
 
-    # plt.plot(prices['price'])
-    # plt.title('%s PriceChart' % PAIR)
-    # plt.ylabel('Price')
-    # plt.xlabel('Time')
-    # plt.show()
-
-    for i, row in prices.iterrows():
-        date, price = row['date'], row['price']
-        print(i, date, price)
 
 
 
