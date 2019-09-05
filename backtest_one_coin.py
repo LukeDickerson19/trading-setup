@@ -18,7 +18,7 @@ import numpy as np
 
 # constants
 QUERI_POLONIEX = False
-BACKTEST_DATA_FILE = './price_data.csv'
+BACKTEST_DATA_FILE = './price_data_one_coin.csv'
 COIN1 = 'USDT'
 COIN2 = 'BTC'
 PAIR = COIN1 + '_' + COIN2

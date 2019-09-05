@@ -20,7 +20,7 @@ import numpy as np
 
 # constants
 QUERI_POLONIEX = True
-BACKTEST_DATA_FILE = './price_data.csv'
+BACKTEST_DATA_FILE = './price_data_multiple_coins.csv'
 TETHER = 'USDT'
 COINS = [
     'BTC',
@@ -164,9 +164,9 @@ if __name__ == '__main__':
 
     # iterate over data
     for i, row in df.iterrows():
-        print(i, row)
-
-
+        print(i)
+        print(row)
+        print()
 
 
         input()
