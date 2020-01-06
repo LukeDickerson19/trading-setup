@@ -18,7 +18,7 @@ import numpy as np
 
 # constants
 QUERI_POLONIEX = False
-BACKTEST_DATA_FILE = './price_data_one_coin.csv'
+BACKTEST_DATA_FILE = './price_data_one_coin-BTC_USD-2hr_intervals-03_01_2018_8am_to_05_30_2019_6am.csv'
 COIN1 = 'USDT'
 COIN2 = 'BTC'
 PAIR = COIN1 + '_' + COIN2
@@ -144,24 +144,31 @@ if __name__ == '__main__':
     num_periods = range(int((endTime - startTime).total_seconds() / period))
 
     # import backtest data of COIN1 and COIN2 pair
-    prices = \
-        get_past_prices_from_poloniex(startTime, endTime, period, num_periods, conn) \
+    df = get_past_prices_from_poloniex(startTime, endTime, period, num_periods, conn) \
         if QUERI_POLONIEX else get_past_prices_from_csv_file()
 
     # convert 'date' column from unix timestamp to datetime
-    prices['date'] = prices['date'].apply(
+    df['date'] = df['date'].apply(
         lambda unix_timestamp : datetime.fromtimestamp(unix_timestamp))
 
-    # plt.plot(prices['price'])
-    # plt.title('%s PriceChart' % PAIR)
-    # plt.ylabel('Price')
-    # plt.xlabel('Time')
-    # plt.show()
-
-    for i, row in prices.iterrows():
-        date, price = row['date'], row['price']
-        print(i, date, price)
+    # get percent change of price each time step
+    # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.pct_change.html
+    df['perc_chng'] = df['price'].pct_change()
+    df.drop([0], inplace=True) # remove first row (b/c it has a NaN value)
+    df.reset_index(drop=True, inplace=True) # reset index accordingly
 
 
+    print(df)
+    input()
+
+    plt.plot(df['price'])
+    plt.title('%s PriceChart' % PAIR)
+    plt.ylabel('Price')
+    plt.xlabel('Time')
+    plt.show()
+
+    for i, row in df.iterrows():
+        date, price, perc_chng = row['date'], row['price'], row['perc_chng']
+        print(i, date, price, perc_chng)
 
         input()

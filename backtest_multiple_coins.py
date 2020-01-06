@@ -19,8 +19,8 @@ import numpy as np
     '''
 
 # constants
-QUERI_POLONIEX = True
-BACKTEST_DATA_FILE = './price_data_multiple_coins.csv'
+QUERI_POLONIEX = False
+BACKTEST_DATA_FILE = './price_data_multiple_coins-BTC_ETH_XRP_LTC_ZEC_XMR_STR_DASH_ETC-2hr_intervals-08_01_2018_7am_to_08_01_2019_4am.csv'
 TETHER = 'USDT'
 COINS = [
     'BTC',
@@ -165,12 +165,46 @@ if __name__ == '__main__':
     # import backtest data of COIN1 and COIN2 pair
     df = get_past_prices_from_poloniex(startTime, endTime, period, num_periods, conn) \
         if QUERI_POLONIEX else get_past_prices_from_csv_file()
+    # columns=[unix_date, datetime, BTC, ETH, XRP, LTC, ZEC, XMR, STR, DASH, ETC]
 
-    # iterate over data
-    for i, row in df.iterrows():
-        print(i)
-        print(row)
+    # get percent change of price each time step
+    # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.pct_change.html   
+    df.rename(columns={coin : coin + '_price' for coin in COINS}, inplace=True)
+    for coin in COINS:
+        df['%s_pct_chng' % coin] = df[coin + '_price'].pct_change()
+    df.drop([0], inplace=True) # remove first row (b/c it has a NaN value)
+    df.reset_index(drop=True, inplace=True) # reset index accordingly
+    # columns=[unix_date, datetime, BTC_price, BTC_pct_chng, ETH_price, ET_pct_chng, ... ]
+
+    print(df)
+
+    # # iterate over data
+    # for i, row in df.iterrows():
+    #     print(i)
+    #     print(row)
+    #     print()
+
+    #     input()
+
+    # can also put it all in a dct ... might be easier this way ...
+    dct = {}
+    for coin in COINS:
+        dct[coin] = pd.DataFrame({
+            'price'    : df[coin + '_price'],
+            'pct_chng' : df[coin + '_pct_chng']
+        })
+
+    for coin, df in dct.items():
+        print(coin)
+        print(df)
         print()
 
+    # plot pct_chng of each coin
+    for coin, df in dct.items():
+        plt.plot(df['pct_chng'])
+        plt.title('%s Percent Change each timestep' % coin)
+        plt.ylabel('pct_chng (1.00 = 100%)')
+        plt.xlabel('time')
+        plt.show()
 
-        input()
+
