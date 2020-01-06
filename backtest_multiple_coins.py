@@ -200,11 +200,28 @@ if __name__ == '__main__':
         print()
 
     # plot pct_chng of each coin
-    for coin, df in dct.items():
-        plt.plot(df['pct_chng'])
-        plt.title('%s Percent Change each timestep' % coin)
-        plt.ylabel('pct_chng (1.00 = 100%)')
-        plt.xlabel('time')
-        plt.show()
+    fig, axes = plt.subplots(3, 3, figsize=(11, 6))
+    fig.suptitle('Percent Change each timestep (1.00 = 100%)')
+    for i, (coin, df) in enumerate(dct.items()):
+        axes[int(i / 3), i % 3].plot(df['pct_chng'])
+        axes[int(i / 3), i % 3].set_title(coin)
+        # axes[int(i / 3), i % 3].set_ylabel('pct_chng')
+        # axes[int(i / 3), i % 3].set_xlabel('time')
+    # plt.tight_layout()
 
-
+    # adjust subplots and display it
+    ''' https://matplotlib.org/3.1.1/api/_as_gen/matplotlib.pyplot.subplots_adjust.html
+    subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
+        left  = 0.125  # the left side of the subplots of the figure                      percentage
+        right = 0.9    # the right side of the subplots of the figure                     percentage
+        bottom = 0.1   # the bottom of the subplots of the figure                         percentage
+        top = 0.9      # the top of the subplots of the figure                            percentage
+        wspace = 0.2   # the amount of width reserved for blank space between subplots    number
+        hspace = 0.2   # the amount of height reserved for white space between subplots   number
+        '''
+    plt.subplots_adjust(
+        left=0.05,
+        right=0.975,
+        bottom=0.05,
+        wspace=0.25, hspace=0.5)
+    plt.show()
