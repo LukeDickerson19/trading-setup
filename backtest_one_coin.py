@@ -40,8 +40,12 @@ DEFAULT_DRAW_LINE = False
 #   new_line_start = print a new line in before the string
 #   new_line_end = print a new line in after the string
 #   draw_line = draw a line on the blank line before or after the string
-def pprint(string='', indent=DEFAULT_INDENT, num_indents=0,
-           new_line_start=False, new_line_end=False, draw_line=DEFAULT_DRAW_LINE):
+def pprint(string='',
+    indent=DEFAULT_INDENT,
+    num_indents=0,
+    new_line_start=False,
+    new_line_end=False,
+    draw_line=DEFAULT_DRAW_LINE):
 
     if DEBUG_WITH_CONSOLE:
 
