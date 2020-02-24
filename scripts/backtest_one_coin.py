@@ -1,6 +1,7 @@
 import time
 import sys
 sys.path.insert(0, './')
+import json
 from poloniex import poloniex
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -18,7 +19,11 @@ import numpy as np
 
 # constants
 QUERI_POLONIEX = False
-BACKTEST_DATA_FILE = './price_data_one_coin-BTC_USD-2hr_intervals-03_01_2018_8am_to_05_30_2019_6am.csv'
+# BACKTEST_DATA_FILE = '../data/price_data_one_coin-BTC_USD-5min_intervals-unknown_to_unknown.csv'
+# BACKTEST_DATA_FILE = './price_data_one_coin-BTC_USD-2hr_intervals-03_01_2018_8am_to_05_30_2019_6am.csv'
+# BACKTEST_DATA_FILE = '../data/price_data_one_coin-BTC_USD-5min_intervals-02-20-2020-12am_to_02-21-2020-12am_ONE_DAY.csv'
+# BACKTEST_DATA_FILE = '../data/price_data_one_coin-BTC_USD-5min_intervals-01-21-2020-12am_to_02-21-2020-12am_ONE_MONTH.csv'
+BACKTEST_DATA_FILE = '../data/price_data_one_coin-BTC_USD-5min_intervals-11-21-2019-12am_to_02-21-2020-12am_ONE_QUARTER.csv'
 COIN1 = 'USDT'
 COIN2 = 'BTC'
 PAIR = COIN1 + '_' + COIN2
@@ -84,14 +89,19 @@ def pprint(string='',
 
         f.close()
 
-
 # setup connection to servers
 def poloniex_server():
 
-    API_KEY = '...'
-    SECRET_KEY = '...'
+    # select which account to use, options:
+    # 'account1' aka lucius.dickerson@gmail.com
+    # 'account2' aka private.mail285@gmail.com
+    account = 'account1'
 
-    return poloniex(API_KEY, SECRET_KEY)
+    data = json.load(open('../../api_keys.json', 'r'))
+    api_key = data[account]['api_key']
+    secret_key = data[account]['secret_key']
+
+    return poloniex(api_key, secret_key)
 
 
 # get backtesting data
@@ -133,12 +143,12 @@ if __name__ == '__main__':
     conn = poloniex_server()
 
     # variables
-    startTime = datetime(2018, 3, 1, 0, 0, 0)  # year, month, day, hour, minute, second
-    endTime   = datetime(2019, 5, 30, 0, 0, 0)
+    startTime = datetime(2019, 11, 21, 0, 0, 0)  # year, month, day, hour, minute, second
+    endTime   = datetime(2020,  2, 21, 0, 0, 0)
     # period = duration of time steps between rebalances
     #   300 s   900 s    1800 s   7200 s   14400 s   86400 s
     #   5 min   15 min   30 min   2 hrs    4 hrs     1 day
-    period = 2 * 60 * 60  # duration of intervals between updates
+    period = 5 * 60  # duration of intervals between updates
 
     # determines the proper number of time steps from startTime to endTime for the given period
     num_periods = range(int((endTime - startTime).total_seconds() / period))

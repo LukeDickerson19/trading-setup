@@ -1,0 +1,9 @@
+
+
+DESCRIPTION:
+
+	Basic setup to poloniex
+
+TODO:
+
+
