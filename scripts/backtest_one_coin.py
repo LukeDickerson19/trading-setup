@@ -18,14 +18,14 @@ import numpy as np
     '''
 
 # constants
-QUERI_POLONIEX = False
+QUERI_POLONIEX = True
 # BACKTEST_DATA_FILE = '../data/price_data_one_coin-BTC_USD-5min_intervals-unknown_to_unknown.csv'
 # BACKTEST_DATA_FILE = './price_data_one_coin-BTC_USD-2hr_intervals-03_01_2018_8am_to_05_30_2019_6am.csv'
 # BACKTEST_DATA_FILE = '../data/price_data_one_coin-BTC_USD-5min_intervals-02-20-2020-12am_to_02-21-2020-12am_ONE_DAY.csv'
 # BACKTEST_DATA_FILE = '../data/price_data_one_coin-BTC_USD-5min_intervals-01-21-2020-12am_to_02-21-2020-12am_ONE_MONTH.csv'
-BACKTEST_DATA_FILE = '../data/price_data_one_coin-BTC_USD-5min_intervals-11-21-2019-12am_to_02-21-2020-12am_ONE_QUARTER.csv'
+BACKTEST_DATA_FILE = '../data/price_data_one_coin-XRP_USD-5min_intervals-ONE_QUARTER-11-21-2019-12am_to_02-21-2020-12am.csv'
 COIN1 = 'USDT'
-COIN2 = 'BTC'
+COIN2 = 'XRP'
 PAIR = COIN1 + '_' + COIN2
 TRADING_FEE = 0.0025
 
@@ -123,12 +123,20 @@ def get_past_prices_from_poloniex(
     prices2 = []
     for t in num_periods:  # remove unneeded data
         price = prices[t]['close']
-        prices2.append({'date': prices[t]['date'], 'price': price})
+        prices2.append({'unix_date': prices[t]['date'], COIN2: price})
 
-    prices3 = pd.DataFrame(prices2)
-    prices3.to_csv(BACKTEST_DATA_FILE)
+    # create 'unix_date' and 'datetime' columns
+    df = pd.DataFrame(prices2)
+    df['datetime'] = df['unix_date'].apply(
+        lambda unix_timestamp : \
+        datetime.fromtimestamp(unix_timestamp))
 
-    return prices3
+    # reorder columns
+    df = df[['unix_date', 'datetime', COIN2]]
+
+    df.to_csv(BACKTEST_DATA_FILE)
+
+    return df
 
 def get_past_prices_from_csv_file():
 
@@ -157,13 +165,9 @@ if __name__ == '__main__':
     df = get_past_prices_from_poloniex(startTime, endTime, period, num_periods, conn) \
         if QUERI_POLONIEX else get_past_prices_from_csv_file()
 
-    # convert 'date' column from unix timestamp to datetime
-    df['date'] = df['date'].apply(
-        lambda unix_timestamp : datetime.fromtimestamp(unix_timestamp))
-
     # get percent change of price each time step
     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.pct_change.html
-    df['perc_chng'] = df['price'].pct_change()
+    df['perc_chng'] = df[COIN2].pct_change()
     df.drop([0], inplace=True) # remove first row (b/c it has a NaN value)
     df.reset_index(drop=True, inplace=True) # reset index accordingly
 
@@ -171,14 +175,14 @@ if __name__ == '__main__':
     print(df)
     input()
 
-    plt.plot(df['price'])
+    plt.plot(df[COIN2])
     plt.title('%s PriceChart' % PAIR)
     plt.ylabel('Price')
     plt.xlabel('Time')
     plt.show()
 
     for i, row in df.iterrows():
-        date, price, perc_chng = row['date'], row['price'], row['perc_chng']
+        date, price, perc_chng = row['datetime'], row[COIN2], row['perc_chng']
         print(i, date, price, perc_chng)
 
         input()
