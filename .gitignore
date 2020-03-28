@@ -1,4 +1,6 @@
 
 
 __pycache__/
+data/
 
+src/api_keys.json
