@@ -2,8 +2,922 @@
 
 DESCRIPTION:
 
-	Basic setup to poloniex
+EXCHANGES AND DATA SOURCES:
+
+	Poloniex:
+	
+	Alpaca:
+		
+		https://alpaca.markets/
+		commission free
+		   what about SEC fees?
+		whats the volume
+		can you short - yes
+		is there leverage - yes 2x (4x if you don't hold over night, cause its stocks, not 24/7)
+		can US citizens use it - yes, only US citizens can use it
+		https://www.reddit.com/r/algotrading/comments/9qqnwx/alpaca_just_released_their_commissionfree_trading/
+		https://medium.com/automation-generation/quick-review-of-setting-up-alpaca-api-with-python-dd31f3ac045f
+
+		https://docs.alpaca.markets/trading-on-alpaca/margin-and-shorting/
+		search "Margin Interest Calculation"
+		https://www.investopedia.com/ask/answers/07/margin_interest.asp
+		to see how 3.75% annual margin interest is prooooobably no big deal
+
+		stuff i signed:
+			https://app.alpaca.markets/internal/accounts/c518ee6d-9da7-492c-bd18-ef21c488c94a/agreements/nasdaq/preview
+			https://app.alpaca.markets/internal/accounts/c518ee6d-9da7-492c-bd18-ef21c488c94a/agreements/nyse/preview
+
+	Stock Pup:	
+
+		DESCRIPTION:
+
+			This script will download the quarterly financial data and stock price of 765 companies
+			over the past 10-20 years from stockpup.com using the BeautifulSoup python library and
+			save all the data to the ./data/quarterly_financial_data/ folder as .csv files.
+			
+			The CSV columns are:
+
+				Quarter end
+				Shares
+				Shares split adjusted
+				Split factor
+				Assets .............................................. net value (in USD) of all money and goods the company owns 
+				Current Assets
+				Liabilities ......................................... net value (in USD) of all debts the company owes
+				Current Liabilities
+				Shareholders equity
+				Non-controlling interest
+				Preferred equity
+				Goodwill & intangibles
+				Long-term debt
+				Revenue ............................................. net value (in USD) of all money the company made the previous quarter
+				Earnings 
+				Earnings available for common stockholders
+				EPS basic
+				EPS diluted
+				Dividend per share
+				Cash from operating activities
+				Cash from investing activities
+				Cash from financing activities
+				Cash change during period
+				Cash at end of period
+				Capital expenditures
+				Price
+				Price high
+				Price low
+				ROE
+				ROA
+				Book value of equity per share
+				P/B ratio
+				P/E ratio = Price / Earnings
+				Cumulative dividends per share
+				Dividend payout ratio ............................... total money given in dividends to shareholders / net income
+				Long-term debt to equity ratio
+				Equity to assets ratio .............................. Equity / Assets = (Assets - Liabilities) / Assets
+				Net margin
+				Asset turnover ...................................... Revenue / Assets
+				Free cash flow per share
+				Current ratio
+
+			For the following 765 companies:
+				A
+				AMR
+				AAN
+				AAP
+				AAPL
+				ABBV
+				ABC
+				ABI_0
+				ABMD
+				ABT
+				ACAS
+				ACC
+				ACIW
+				ACM
+				ACN
+				ACS
+				ACV
+				ACXM
+				ADBE
+				ADCT
+				ADI
+				ADM
+				ADP
+				ADS
+				ADSK
+				ADT
+				AEE
+				AEO
+				AEP
+				AES
+				AET
+				AFG
+				AFL
+				AGCO
+				AGN
+				WPI
+				AHL
+				AIG
+				AIV
+				AIZ
+				AJG
+				AKAM
+				AKRX
+				ALB
+				ALEX
+				ALGN
+				ALK
+				ALL
+				ALLE
+				ALTR
+				ALXN
+				AMAT
+				ABK
+				AMCX
+				AMD
+				AME
+				AMG
+				AMGN
+				AMP
+				AMSC
+				AMT
+				AMZN
+				AN
+				TSO
+				ANDW
+				ANF
+				ANR
+				ANSS
+				WLP
+				AOC
+				AOS
+				APA
+				APC
+				APD
+				APH
+				APOL
+				APU
+				ARE
+				ARG
+				AA
+				ARRS
+				ARW
+				ASH
+				DV
+				ATI
+				ATVI
+				AVB
+				AVGO
+				AVP
+				AVY
+				AW
+				AWK
+				AXP
+				AYE
+				AYI
+				AZO
+				BA
+				BAC
+				BAX
+				BBBY
+				BBT
+				BBY
+				BC
+				BCR
+				BDK
+				BDX
+				FO
+				BEN
+				BF.B
+				BHF
+				BHI
+				BIG
+				BIIB
+				BJS
+				BK
+				BKE
+				BLK
+				BLL
+				BMC
+				BMS
+				BMY
+				BNI
+				BRCM
+				BRK.A
+				BRL
+				BRLI
+				BSC
+				BSX
+				BTU
+				BUD
+				BWA
+				BXP
+				C
+				CA
+				CAG
+				CAH
+				CAM
+				CAT
+				ACE
+				CB
+				CBE
+				CBG
+				CBOE
+				CBS
+				CCE
+				CCE_1
+				CCI
+				CCL
+				CCU
+				CDNS
+				CEG
+				CELG
+				CERN
+				CF
+				CFC
+				CFG
+				CFN
+				CHD
+				CHK
+				CHRW
+				CI
+				CIEN
+				CINF
+				CIT
+				CL
+				CLF
+				CLX
+				CMA
+				CMCSA
+				CME
+				CMG
+				CMI
+				CMS
+				CMVT
+				CNC
+				CNO
+				CNP
+				CNX
+				COF
+				COG
+				COH
+				COL
+				COO
+				COP
+				COST
+				COTY
+				COV
+				CPB
+				CPN
+				CPWR
+				CR
+				CRA
+				CRM
+				CRVL
+				CSCO
+				CSRA
+				CSX
+				CTAS
+				CTL
+				CTSH
+				CTX
+				CTXS
+				CVC
+				CVG
+				CVH
+				CVS
+				CVX
+				CXO
+				D
+				DAL
+				DCI
+				DD
+				DDR
+				DDS
+				DE
+				DELL
+				DF
+				DFS
+				DG_1
+				DGX
+				DHI
+				DHR
+				DIS
+				DISCA
+				DISH
+				DLPH
+				DLR
+				DLTR
+				DNB
+				DNR
+				DO
+				DOV
+				DPS
+				DRE
+				DRI
+				DTE
+				DTV
+				DUK
+				DVA
+				DVN
+				DOW
+				CSC
+				DYN
+				ERTS
+				EBAY
+				ECL
+				ED
+				EDS
+				EFX
+				EIX
+				EL
+				EMC
+				EMN
+				EMR
+				ENDP
+				EOG
+				EP
+				EQ
+				EQIX
+				EQR
+				EQT
+				NU
+				ESRX
+				ESS
+				ESV
+				ETFC
+				ETN
+				ETR
+				EW
+				EXC
+				EXPD
+				EXPE
+				EXR
+				F
+				FAST
+				FB
+				FBHS
+				FCX
+				FDO
+				FDS
+				FDX
+				FE
+				FFIV
+				FHN
+				FII
+				FIS
+				FISV
+				FITB
+				FL
+				FLIR
+				FLR
+				FLS
+				FMC
+				FRE
+				FNM
+				FOSL
+				NWS.A
+				FRT
+				FRX
+				FSLR
+				FTI
+				CZN
+				FTV
+				GAS
+				GAS_0
+				GCI_0
+				GD
+				GE
+				GENZ
+				GGP
+				GGP_0
+				WPO
+				GILD
+				GIS
+				GLAD
+				GLW
+				GM
+				GM_0
+				GME
+				GNW
+				GOOG
+				GPC
+				GPN
+				GPS
+				GR
+				GRA
+				GRMN
+				GS
+				GT
+				GWW
+				HAL
+				HAR
+				HAS
+				HBAN
+				HBI
+				HCA
+				HCBK
+				HCN
+				HCP
+				HD
+				HES
+				HIBB
+				HIG
+				HLT
+				HNZ
+				HOG
+				HOLX
+				HON
+				HOT
+				HP
+				HPC
+				HPE
+				HPQ
+				HRB
+				HRL
+				HRS
+				SLE
+				HSIC
+				HSP
+				HST
+				HSY
+				HUM
+				IACI
+				IBM
+				ICE
+				NYX
+				IDXX
+				IFF
+				IGT
+				ILMN
+				INCY
+				INFO
+				INTC
+				INTU
+				IP
+				IPG
+				IR
+				IRM
+				ISRG
+				IT
+				ITT
+				ITW
+				IVZ
+				JAVA
+				JBHT
+				JBL
+				JCI
+				JCP
+				JEC
+				JNJ
+				JNPR
+				JNS
+				JNY
+				JPM
+				JWN
+				K
+				LIZ
+				KBH
+				KEY
+				KG
+				KHC
+				KIM
+				KLAC
+				KMB
+				KMI
+				KMX
+				KO
+				EK
+				KORS
+				KR
+				KRFT
+				KSS
+				KSU
+				LTR
+				LTD
+				SAI
+				LEG
+				LEH_0
+				LEN
+				LH
+				LIFE
+				LKQ
+				LLL
+				LLTC
+				LLY
+				LM
+				LMT
+				LNC
+				LNKD
+				LNT
+				LOW
+				LRCX
+				LSI
+				LSTR
+				LUK
+				LUV
+				LVLT
+				LXK
+				LYB
+				M
+				MA
+				MAA
+				MAC
+				MAR
+				MAS
+				MAT
+				MBI
+				MCD
+				MCHP
+				MCK
+				MCO
+				KFT
+				MDP
+				MDT
+				MED
+				MER
+				MET
+				MFE
+				MGM
+				MHK
+				MHS
+				MI
+				MIL
+				MJN
+				MKC
+				MLM
+				MMC
+				MMM
+				MNK
+				MNST
+				MO
+				MOLX
+				MON
+				MOS
+				MPC
+				MRK
+				MRO
+				MS
+				MSFT
+				MOT
+				MTB
+				MTD
+				MTG
+				MTW
+				MU
+				MUR
+				MWV
+				MNST_0
+				MYL
+				NAV
+				NAVI
+				NBL
+				NBR
+				NCC
+				NCLH
+				NDAQ
+				NE
+				FPL
+				NEM
+				NFLX
+				NFX
+				NI
+				NILE
+				NKE
+				NLSN
+				NOC
+				NOV
+				NOVL
+				NRG
+				NSC
+				NSM
+				NTAP
+				NTRS
+				NUE
+				NUS
+				NVDA
+				NVLS
+				NWL
+				NWS
+				NYT
+				O
+				ODP
+				OFLX
+				OI
+				OKE
+				OMC
+				OMX
+				ORCL
+				ORLY
+				OXY
+				PAYX
+				PBCT
+				PBG
+				PBI
+				PCAR
+				PCG
+				PCL
+				PCLN
+				PCP
+				PDCO
+				PEG
+				PEP
+				PETM
+				PETS
+				PFE
+				PFG
+				PFIE
+				PG
+				PGN
+				PGR
+				PH
+				PHM
+				PKG
+				PKI
+				PLD
+				PLD_0
+				PLL
+				PM
+				PNC
+				PNR
+				PNW
+				POM
+				PPG
+				PPL
+				PRGO
+				PRU
+				PSA
+				PSX
+				PMTC
+				PTV
+				PVH
+				PWR
+				PX
+				PXD
+				PYPL
+				Q
+				Q_1
+				QCOM
+				QLGC
+				QRVO
+				QSII
+				R
+				RAD
+				RAI
+				RAVN
+				RCL
+				RDC
+				RE
+				REG
+				REGN
+				RF
+				RHI
+				RHT
+				RIG
+				RJF
+				RL
+				RMD
+				ROH
+				ROK
+				ROP
+				ROST
+				RRC
+				RRD
+				RSG
+				RSH
+				RTN
+				RX
+				S
+				SAF
+				SAM
+				SANM
+				SAPE
+				SBAC
+				SBL
+				SBUX
+				SCG
+				SCHW
+				SE
+				SEE
+				SGP
+				SHLD
+				SHW
+				SIAL
+				SIG
+				SII
+				SJM
+				SLB
+				SLG
+				SLM
+				SNA
+				SNDK
+				SNI
+				SNPS
+				SO
+				SOV
+				SPG
+				MHP
+				SPLS
+				SRCL
+				SRE
+				SSP
+				STI
+				STJ
+				STR
+				STT
+				STX
+				STZ
+				SUN
+				WFR
+				SVU
+				SWK
+				SWKS
+				SWN
+				SWY
+				SYF
+				SYK
+				SYMC
+				SYNT
+				SYY
+				T
+				TAP
+				TDC
+				TDG
+				TE
+				TEG
+				TEL
+				TER
+				TEX
+				GCI
+				TGT
+				THC
+				TIE
+				TIF
+				TIN
+				TJX
+				TKR
+				TLAB
+				TMK
+				TMO
+				TRIP
+				TROW
+				TRV
+				TSCO
+				TSLA
+				TSN
+				TSS
+				TT
+				TWC
+				TWTR
+				TWX
+				TXN
+				TXT
+				TYC
+				UA
+				UAL
+				UDR
+				UG
+				UHS
+				UIS
+				ULTA
+				UNH
+				UNM
+				UNP
+				UPS
+				URBN
+				URI
+				USB
+				UST
+				UTX
+				V
+				VAR
+				VFC
+				VIA.B
+				JDSU
+				VIVO
+				VLO
+				VMC
+				VNO
+				VRSK
+				VRSN
+				VRTX
+				VTR
+				VZ
+				WAG
+				WAT
+				WB
+				WBA
+				WDC
+				WDR
+				WEC
+				WEN
+				WFC
+				WFMI
+				WFT
+				WHR
+				WIN
+				WINA
+				WLTW
+				WM
+				WM_0
+				WMB
+				WMT
+				WPX
+				WRK
+				WU
+				WWY
+				WY
+				WYE
+				WYN
+				WYNN
+				X
+				XEC
+				XEL
+				XL
+				XLNX
+				XOM
+				XRAY
+				XRX
+				XTO
+				XYL
+				YHOO
+				YUM
+				ZMH
+				ZION
+				ZTS
+
+
+		USAGE:
+
+			To Download the .csv files of fundamental data from online:
+
+				make a directory called "quarterly_financial_data" in the same
+				parent directory as the wsm-machine repository
+					mkdir quarterly_financial_data
+
+				run this script in the directory it is currently in:
+					python stock_pup_scrapper.py
+
+					p.s.
+						in the main function of this script (if __name__ == '__main__':)
+						verify the download_financial_data() function is uncommented and
+						the path to the directory where the data will be saved is correct
+
+			To get the data from the .csv file:
+
+				the function "get_financial_data_from_CSVs" puts the data from each csv
+				file in a pandas dataframe and stored each dataframe in a python
+				dictionary where the company ticker is the key and the corresponding
+				dataframe is the value. The function takes 1 argument: the directory
+				where all the csv files are. If you want to call the function in this
+				script you can do so as follows:
+
+				 	directory = os.getcwd()
+					directory = directory[:len(directory)-len('wsm-machine/src/data_gathering/stock_pup_data')]
+					directory += 'quarterly_financial_data/'
+					financial_data = get_financial_data_from_CSVs(directory)
+
+				If you import this script into another script that isn't in the same
+				directory as this one then you need to find the directory yourself.
+
+
+		SOURCES:
+
+			data source
+			http://www.stockpup.com/data/
+
+			web scrapping help
+			https://stackoverflow.com/questions/19056031/download-files-using-requests-and-beautifulsoup
+			https://medium.freecodecamp.org/how-to-scrape-websites-with-python-and-beautifulsoup-5946935d93fe
+
+
+
+
 
 TODO:
+
+	Stock Pup:
+
+		NOW:
+
+			use the stockpup code to create a yahoo finance scrapper too
+				what fundamentals do it provide though?
+				https://www.mattbutton.com/2019/01/24/how-to-scrape-yahoo-finance-and-extract-fundamental-stock-market-data-using-python-lxml-and-pandas/
+
+			write the definitions of each CSV column in the DESCRIPTION of this file.
+				they're all on stockpup 
+				http://www.stockpup.com/data/
+
+
+		EVENTUALLY:
+
+			make a script to plot average earnings of all companies over time
+				has it decreased in the last few years?
+
+			make a script to plot the values of all the fundamentals of a given company over time
+
+				sort the stocks by their stability in price and long term growth
+				what do their fundamentals look like in the beginning when they first went public?
+				what is differnent about their fundamentals from the stocks that are volitile and don't grow?
 
 

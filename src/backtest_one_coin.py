@@ -1,8 +1,19 @@
-import time
 import sys
-sys.path.insert(0, './')
+import os
+import pathlib
+SCRIPT_PATH = pathlib.Path(__file__).resolve()
+ROOT_PATH   = SCRIPT_PATH.parent.parent
+DATA_PATH   = os.path.join(ROOT_PATH.absolute(), 'data', 'crypto', 'poloniex')
+# print(SCRIPT_PATH.absolute())
+# print(ROOT_PATH.absolute())
+# print(DATA_PATH)
+# sys.exit()
+POLONIEX_PATH = os.path.join(ROOT_PATH.absolute(), 'src', 'exchanges', 'crypto')
+sys.path.insert(0, POLONIEX_PATH)
+from poloniex import Poloniex
+
+import time
 import json
-from poloniex import poloniex
 from datetime import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -11,25 +22,19 @@ pd.set_option('display.max_columns', 10)
 # pd.set_option('display.width', 1000)
 import numpy as np
 
-
-
 # constants
 QUERI_POLONIEX = False
-BACKTEST_DATA_FILE = '../data/price_data_multiple_coins-BTC_ETH_XRP_LTC_ZEC_XMR_STR_DASH_ETC-2hr_intervals-08_01_2018_7am_to_08_01_2019_4am.csv'
-TETHER = 'USDT'
-COINS = [
-    'BTC',
-    'ETH',
-    'XRP',
-    'LTC',
-    'ZEC',
-    'XMR',
-    'STR',
-    'DASH',
-    'ETC',
-]
-PAIRS = [TETHER + '_' + coin for coin in COINS]
+COIN1 = 'USDT'
+COIN2 = 'BTC'
+PAIR = COIN1 + '_' + COIN2
 TRADING_FEE = 0.0025
+
+DATA_FILENAME = 'price_data_one_coin-%s_%s-2hr_intervals-ONE_YEAR-03_01_2018_8am_to_05_30_2019_6am.csv' % (COIN2, COIN1)
+DATA_FILENAME = 'price_data_one_coin-%s_%s-5min_intervals-ONE_DAY-02-20-2020-12am_to_02-21-2020-12am.csv' % (COIN2, COIN1)
+DATA_FILENAME = 'price_data_one_coin-%s_%s-5min_intervals-ONE_MONTH-01-21-2020-12am_to_02-21-2020-12am.csv' % (COIN2, COIN1)
+DATA_FILENAME = 'price_data_one_coin-%s_%s-5min_intervals-ONE_QUARTER-11-21-2019-12am_to_02-21-2020-12am.csv' % (COIN2, COIN1)
+BACKTEST_DATA_FILE = os.path.join(DATA_PATH, DATA_FILENAME)
+
 
 # pprint constants
 DEBUG_WITH_CONSOLE = True
@@ -91,7 +96,6 @@ def pprint(string='',
 
         f.close()
 
-
 # setup connection to servers
 def poloniex_server():
 
@@ -100,11 +104,12 @@ def poloniex_server():
     # 'account2' aka private.mail285@gmail.com
     account = 'account1'
 
-    data = json.load(open('../../api_keys.json', 'r'))
-    api_key = data[account]['api_key']
-    secret_key = data[account]['secret_key']
+    data       = json.load(open('./api_keys.json', 'r'))
+    api_key    = data['exchanges']['poloniex'][account]['api_key']
+    secret_key = data['exchanges']['poloniex'][account]['secret_key']
 
-    return poloniex(api_key, secret_key)
+    return Poloniex(api_key, secret_key)
+
 
 # get backtesting data
 def get_past_prices_from_poloniex(
@@ -114,30 +119,28 @@ def get_past_prices_from_poloniex(
     startTime_unix = time.mktime(startTime.timetuple())
     endTime_unix = time.mktime(endTime.timetuple())
 
-    # get price history data for each pair into a dictionary
-    dct = { pair :
-        conn.api_query("returnChartData", {
-            'currencyPair': pair,
+    # get history data of this currency into the dictionary
+    prices = conn.api_query("returnChartData", {
+            'currencyPair': PAIR,
             'start': startTime_unix,
             'end': endTime_unix,
             'period': period
-        }) for pair in PAIRS}
+        })
+
+    prices2 = []
+    for t in num_periods:  # remove unneeded data
+        price = prices[t]['close']
+        prices2.append({'unix_date': prices[t]['date'], COIN2: price})
 
     # create 'unix_date' and 'datetime' columns
-    df = pd.DataFrame()
-    dates = [dct[PAIRS[0]][t]['date'] for t in num_periods]
-    df['unix_date'] = pd.Series(dates)
+    df = pd.DataFrame(prices2)
     df['datetime'] = df['unix_date'].apply(
         lambda unix_timestamp : \
         datetime.fromtimestamp(unix_timestamp))
 
-    # remove unneeded data
-    for pair, data in dct.items():
-        coin = pair[len(TETHER + '_'):]
-        data2 = [data[t]['close'] for t in num_periods]
-        df[coin] = pd.Series(data2)
+    # reorder columns
+    df = df[['unix_date', 'datetime', COIN2]]
 
-    # save df to file
     df.to_csv(BACKTEST_DATA_FILE)
 
     return df
@@ -148,17 +151,19 @@ def get_past_prices_from_csv_file():
 
 
 
+
+
 if __name__ == '__main__':
 
     conn = poloniex_server()
 
     # variables
-    startTime = datetime(2018, 8, 1, 0, 0, 0)  # year, month, day, hour, minute, second
-    endTime   = datetime(2019, 8, 1, 0, 0, 0)
+    startTime = datetime(2019, 11, 21, 0, 0, 0)  # year, month, day, hour, minute, second
+    endTime   = datetime(2020,  2, 21, 0, 0, 0)
     # period = duration of time steps between rebalances
     #   300 s   900 s    1800 s   7200 s   14400 s   86400 s
     #   5 min   15 min   30 min   2 hrs    4 hrs     1 day
-    period = 2 * 60 * 60  # duration of intervals between updates
+    period = 5 * 60  # duration of intervals between updates
 
     # determines the proper number of time steps from startTime to endTime for the given period
     num_periods = range(int((endTime - startTime).total_seconds() / period))
@@ -166,63 +171,25 @@ if __name__ == '__main__':
     # import backtest data of COIN1 and COIN2 pair
     df = get_past_prices_from_poloniex(startTime, endTime, period, num_periods, conn) \
         if QUERI_POLONIEX else get_past_prices_from_csv_file()
-    # columns=[unix_date, datetime, BTC, ETH, XRP, LTC, ZEC, XMR, STR, DASH, ETC]
 
     # get percent change of price each time step
-    # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.pct_change.html   
-    df.rename(columns={coin : coin + '_price' for coin in COINS}, inplace=True)
-    for coin in COINS:
-        df['%s_pct_chng' % coin] = df[coin + '_price'].pct_change()
+    # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.pct_change.html
+    df['perc_chng'] = df[COIN2].pct_change()
     df.drop([0], inplace=True) # remove first row (b/c it has a NaN value)
     df.reset_index(drop=True, inplace=True) # reset index accordingly
-    # columns=[unix_date, datetime, BTC_price, BTC_pct_chng, ETH_price, ET_pct_chng, ... ]
+
 
     print(df)
+    input()
 
-    # # iterate over data
-    # for i, row in df.iterrows():
-    #     print(i)
-    #     print(row)
-    #     print()
-
-    #     input()
-
-    # can also put it all in a dct ... might be easier this way ...
-    dct = {}
-    for coin in COINS:
-        dct[coin] = pd.DataFrame({
-            'price'    : df[coin + '_price'],
-            'pct_chng' : df[coin + '_pct_chng']
-        })
-
-    for coin, df in dct.items():
-        print(coin)
-        print(df)
-        print()
-
-    # plot pct_chng of each coin
-    fig, axes = plt.subplots(3, 3, figsize=(11, 6))
-    fig.suptitle('Percent Change each timestep (1.00 = 100%)')
-    for i, (coin, df) in enumerate(dct.items()):
-        axes[int(i / 3), i % 3].plot(df['pct_chng'])
-        axes[int(i / 3), i % 3].set_title(coin)
-        # axes[int(i / 3), i % 3].set_ylabel('pct_chng')
-        # axes[int(i / 3), i % 3].set_xlabel('time')
-    # plt.tight_layout()
-
-    # adjust subplots and display it
-    ''' https://matplotlib.org/3.1.1/api/_as_gen/matplotlib.pyplot.subplots_adjust.html
-    subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
-        left  = 0.125  # the left side of the subplots of the figure                      percentage
-        right = 0.9    # the right side of the subplots of the figure                     percentage
-        bottom = 0.1   # the bottom of the subplots of the figure                         percentage
-        top = 0.9      # the top of the subplots of the figure                            percentage
-        wspace = 0.2   # the amount of width reserved for blank space between subplots    number
-        hspace = 0.2   # the amount of height reserved for white space between subplots   number
-        '''
-    plt.subplots_adjust(
-        left=0.05,
-        right=0.975,
-        bottom=0.05,
-        wspace=0.25, hspace=0.5)
+    plt.plot(df[COIN2])
+    plt.title('%s PriceChart' % PAIR)
+    plt.ylabel('Price')
+    plt.xlabel('Time')
     plt.show()
+
+    for i, row in df.iterrows():
+        date, price, perc_chng = row['datetime'], row[COIN2], row['perc_chng']
+        print(i, date, price, perc_chng)
+
+        input()

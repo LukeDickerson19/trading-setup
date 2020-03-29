@@ -1,0 +1,37 @@
+{
+	"exchanges" : [
+		"poloniex" : {
+			"account1" : {
+				"email"      : "",
+				"password"   : "",
+				"2FA"        : "",
+				"api_key"    : "",
+				"secret_key" : ""
+			},
+			"account2" : {
+				"email"      : "",
+				"password"   : "",
+				"2FA"        : "",
+				"api_key"    : "",
+				"secret_key" : ""
+			}
+		},
+		"alpaca" : {
+			"account1" : {
+				"email"      : "",
+				"password"   : "",
+				"2FA"        : "",
+				"paper_trading" : {
+					"ENDPOINT"       : ""
+					"API_KEY_ID"     : ""
+					"SECRET_KEY"     : ""
+				},
+				"live_trading"  : {
+					"ENDPOINT"       : ""
+					"API_KEY_ID"     : ""
+					"SECRET_KEY"     : ""
+				}
+			}
+		}
+	]
+}

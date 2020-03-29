@@ -1,6 +1,3 @@
-
-
-
 from urllib.request import urlopen
 from urllib.parse import urlencode
 import json
@@ -12,7 +9,7 @@ def createTimeStamp(datestr, format="%Y-%m-%d %H:%M:%S"):
     return time.mktime(time.strptime(datestr, format))
 
 
-class poloniex:
+class Poloniex:
     def __init__(self, APIKey, Secret):
         self.APIKey = APIKey
         self.Secret = Secret
@@ -32,18 +29,22 @@ class poloniex:
 
     def api_query(self, command, req={}):
 
-        if(command == "returnTicker" or command == "return24Volume"):
+        if (command == "returnTicker" or command == "return24Volume"):
             ret = urlopen('https://poloniex.com/public?command=' + command)
             return json.loads(ret.read())
+
         elif(command == "returnOrderBook"):
             ret = urlopen('https://poloniex.com/public?command=' + command + '&currencyPair=' + str(req['currencyPair']))
             return json.loads(ret.read())
+
         elif(command == "returnMarketTradeHistory"):
             ret = urlopen('https://poloniex.com/public?command=' + "returnTradeHistory" + '&currencyPair=' + str(req['currencyPair']))
             return json.loads(ret.read())
+
         elif(command == "returnChartData"):
             ret = urlopen('https://poloniex.com/public?command=returnChartData&currencyPair=' + str(req['currencyPair']) + '&start=' + str(req['start']) + '&end=' + str(req['end']) + '&period=' + str(req['period']))
             return json.loads(ret.read())
+
         else:
             req['command'] = command
             req['nonce'] = int(time.time()*1000)
