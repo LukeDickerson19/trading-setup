@@ -1,5 +1,5 @@
 {
-	"exchanges" : [
+	"exchanges" : {
 		"poloniex" : {
 			"account1" : {
 				"email"      : "",
@@ -33,5 +33,12 @@
 				}
 			}
 		}
-	]
+	},
+	"data_sources" : {
+		"simfin" : {
+			"email"    : "",
+			"username" : "",
+			"password" : "",
+		}
+	}
 }

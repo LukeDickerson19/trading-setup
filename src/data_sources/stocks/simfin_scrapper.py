@@ -2,18 +2,25 @@ import sys
 import os
 import time
 import json
+import subprocess
 import requests
 from io import StringIO
 from datetime import datetime
-import pandas as pd
 import numpy as np
+import pandas as pd
+MAX_ROWS = 50
+pd.set_option('display.max_rows', MAX_ROWS)
+pd.set_option('display.max_columns', 100)
+pd.set_option('display.width', 200)
+import simfin as sf
 from bs4 import BeautifulSoup as bs
 import pathlib
-SCRIPT_PATH	   = pathlib.Path(__file__).resolve()
+SCRIPT_PATH    = pathlib.Path(__file__).resolve()
 ROOT_PATH      = SCRIPT_PATH.parent.parent.parent.parent
-DATA_PATH      = os.path.join(ROOT_PATH.absolute(), 'data', 'stocks', 'stockpup', 'quarterly_fundamental_data')
+RAW_DATA_PATH  = os.path.join(ROOT_PATH.absolute(), 'data', 'stocks', 'simfin', 'quarterly_fundamental_data', 'raw')
+FMTD_DATA_PATH = os.path.join(ROOT_PATH.absolute(), 'data', 'stocks', 'simfin', 'quarterly_fundamental_data', 'formatted')
 SRC_PATH       = os.path.join(ROOT_PATH.absolute(), 'src')
-PLOT_DATA_PATH = os.path.join(ROOT_PATH.absolute(), 'data', 'stocks', 'stockpup', 'pre_processed_plot_data.json')
+PLOT_DATA_PATH = os.path.join(ROOT_PATH.absolute(), 'data', 'stocks', 'simfin', 'pre_processed_plot_data.json')
 sys.path.append(SRC_PATH)
 # print(SCRIPT_PATH.absolute())
 # print(ROOT_PATH.absolute())
@@ -29,13 +36,21 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 
-class StockPup:
+class SimFinScrapper:
 
 	def __init__(self):
 
-		self.url = 'http://www.stockpup.com/data/'
+		# Set your API-key for downloading data.
+		# If the API-key is 'free' then you will get the free data,
+		# otherwise you will get the data you have paid for.
+		# See www.simfin.com for what data is free and how to buy more.
+		sf.set_api_key('free')
 
-		self.report_name = 'StockPup Data Coverage Report'
+		# Set the local directory where data-files are stored.
+		# The dir will be created if it does not already exist.
+		sf.set_data_dir(RAW_DATA_PATH)
+
+		self.report_name = 'SimFin Data Coverage Report'
 
 
 
@@ -64,12 +79,14 @@ class StockPup:
 
 		if source == 'web':
 
-			# verify the website has the same number of assets as local
+			# verify the website has the same number of assets as local (or local has 0)
 			if verbose:
-				print('\nVerifying the website has the same number of assets as local ...')
+				print('\nVerifying the website has the same number of assets as local (or local has 0) ...')
 			assets_on_web   = self.get_all_asset_names_and_locations('web')
 			assets_on_local = self.get_all_asset_names_and_locations('local')
-			if len(set(assets_on_web)) != len(set(assets_on_local)):
+			if len(set(assets_on_local)) == 0:
+				pass # this IF block is used to check if local has 0 before checking if their equal
+			elif len(set(assets_on_web)) != len(set(assets_on_local)):
 				print('Number of Assets on Web does not equal number of assets on local. Aborting data gathering.')
 				print('%d assets on the web, %d asset on local' % (
 					len(set(assets_on_web)),
@@ -86,25 +103,42 @@ class StockPup:
 			if verbose:
 				print('Verification complete.\n')
 
-			# get the data for each asset
-			assets = {}
+			# get the data for each asset from online
 			if verbose:
 				print('\nDownloading the data for each asset from the web ...')
 				start_time = datetime.now()
+			income_df      = sf.load('income',      variant='quarterly', market='us')
+			balance_df     = sf.load('balance',     variant='quarterly', market='us')
+			cashflow_df    = sf.load('cashflow',    variant='quarterly', market='us')
+			shareprices_df = sf.load('shareprices', variant='daily',     market='us')
+			if verbose:
+				end_time = datetime.now()
+				print('Downloads complete. Duration: %.1f minutes\n' % ((end_time - start_time).total_seconds() / 60.0))
+
+			# format the data
+			if verbose:
+				print('\nFormatting the data for each asset ...')
+				start_time = datetime.now()
 			n  = len(assets_on_web.keys())
 			bp = BlockPrinter()
+			assets = {}
 			for i, (ticker, url) in enumerate(assets_on_web.items()):
-				filepath = assets_on_local[ticker]
-				assets[ticker] = self.get_data_of_1_asset(ticker, url,
-										save=True, filepath=filepath, append=True)
-				# df1 = pd.read_csv(filepath, index_col=[0])
-				# print('data from updated local file\t', df1.shape)
+				filepath = assets_on_local[ticker] if assets_on_local != {} else \
+					os.path.join(FMTD_DATA_PATH, ticker+'.csv')
+				assets[ticker] = self.get_data_of_1_asset(
+									ticker,
+									income_df[income_df['Ticker'] == ticker],
+									balance_df[balance_df['Ticker'] == ticker],
+									cashflow_df[cashflow_df['Ticker'] == ticker],
+									shareprices_df[shareprices_df['Ticker'] == ticker],
+									save=True, filepath=filepath, append=True)
 				if verbose:
 					bp.print('Ticker %s:\tasset %d out of %d, %.1f %% complete.' % (
 						ticker, (i+1), n, 100 * (i+1) / n))
 			if verbose:
 				end_time = datetime.now()
-				print('Downloads complete. Duration: %.1f minutes\n' % ((end_time - start_time).total_seconds() / 60.0))
+				print('Formatting complete. Duration: %.1f minutes\n' % ((end_time - start_time).total_seconds() / 60.0))
+			sys.exit()
 
 		elif source == 'local':
 
@@ -136,18 +170,12 @@ class StockPup:
 	def get_all_asset_names_and_locations(self, source, verbose=False):
 
 		if source == 'web':
-			r = requests.get(self.url)
-			soup = bs(r.text, 'lxml')
-			assets = {}
-			for i, link in enumerate(soup.findAll('a')):
-				href = link.get('href')
-				if href and href.endswith('_quarterly_financial_data.csv'):
-					url = self.url[:len(self.url)-len('/data/')] + href
-					name = href[len('/data/'):len(href)-len('_quarterly_financial_data.csv')]# + '.csv'
-					assets[name] = url
+			df = sf.load_companies(market='us') # download data
+			assets_on_web = df.index.tolist() # get assets on web list
+			assets = {ticker : '' for ticker in assets_on_web}
 	
 		elif source == 'local':
-			base_filepath = DATA_PATH
+			base_filepath = FMTD_DATA_PATH
 			assets = {}
 			for filename in os.listdir(base_filepath):
 				if os.path.isfile(os.path.join(base_filepath, filename)):
@@ -166,7 +194,7 @@ class StockPup:
 			for tn, loc in assets.items():
 				print('%s\t%s' % (tn, loc))
 				input()
-
+			
 		return assets
 
 	''' get_data_of_1_asset
@@ -180,11 +208,95 @@ class StockPup:
 			append - boolean - if True, append the new data to the old data (append XOR overwrite must be True)
 			overwrite - boolean - if True, overwrite the old data with the new data (append XOR overwrite must be True)
 		'''
-	def get_data_of_1_asset(self, ticker, url, save=False, filepath=None, append=False, overwrite=False):
+	def get_data_of_1_asset(self, ticker,
+		income_df, balance_df, cashflow_df, shareprices_df,
+		save=False, filepath=None, append=False, overwrite=False):
 
-		# print(ticker)
-		df = self.download_csv_file(url)
-		# print('data from web\t', df.shape)
+		df = income_df.copy()
+
+		# the overlapping columns between 2 dataframes (aka the columns with same name)
+		# need to have the same values for the dataframes to merge properly
+		# if they don't, combine each overlapping col such that for each row:
+		# if both rows have a nan value, use an nan value
+		# if just one of them is nan, use the non nan value
+		# if neither are nan, take the average
+		def combine_overlapping_columns(df1, df2):
+			df1 = df1.reset_index(drop=True)
+			df2 = df2.reset_index(drop=True)
+			overlapping_columns = list(set(df1.columns).intersection(set(df2.columns)))
+			def combo(v1, v2):
+				# print('combo %s, %s' % (v1, v2))
+				try:
+					if np.isnan(v1) and np.isnan(v2):
+						# print('np.isnan(v1) and np.isnan(v2)')
+						return v1
+				except: pass
+				try:
+					if np.isnan(v1):
+						# print('np.isnan(v1)')
+						return v2
+				except: pass
+				try:
+					if np.isnan(v2):
+						# print('np.isnan(v1)')
+						return v1
+				except: pass
+				if v1==v2:
+					# print('v1==v2, returning v1')
+					return v1
+				if isinstance(v1, str) and isinstance(v2, str):
+					# print('isinstance(v1, str) and isinstance(v2, str), returning v1')
+					return v1 # idk what else you would return
+				# print('sum(v1, v2) / 2')
+				return v1#sum(v1, v2) / 2
+			for col in overlapping_columns:
+				if col != 'Quarter end' and df1[col].tolist() != df2[col].tolist():
+					new_data = df1[col].combine(df2[col], combo).tolist()
+					# print(1)
+					# print(df1[col])
+					# print(2)
+					# print(df2[col])
+					# print(3)
+					# print(new_data)
+					df1[col] = new_data
+					df2[col] = new_data
+			return df1, df2
+
+		# convert "Fiscal Year" and "Fiscal Quarter" columns into "Quarter end" column with format: 'YYYY-MM-DD'
+		def get_quarter_str(fiscal_period):
+			if fiscal_period == 'Q1': return '-03-31'
+			if fiscal_period == 'Q2': return '-06-30'
+			if fiscal_period == 'Q3': return '-09-30'
+			if fiscal_period == 'Q4': return '-12-31'
+
+		df.insert(0, 'Quarter end',
+			df['Fiscal Year'].astype(str) + \
+			df['Fiscal Period'].apply(lambda p : get_quarter_str(p)))
+
+		# get share prices at end of each quarter
+		shareprices_df = shareprices_df[shareprices_df['Date'].isin(df['Quarter end'])][['Date', 'Close']].rename(
+			columns={
+				'Date'  : 'Quarter end',
+				'Close' : 'Close Price'
+			})
+		df, shareprices_df = combine_overlapping_columns(df, shareprices_df)
+		df = pd.merge(df, shareprices_df, on=list(set(df.columns).intersection(set(shareprices_df.columns))), how='outer')
+
+		balance_df.insert(0, 'Quarter end',
+			balance_df['Fiscal Year'].astype(str) + \
+			balance_df['Fiscal Period'].apply(lambda p : get_quarter_str(p)))
+		df, balance_df = combine_overlapping_columns(df, balance_df)
+		df = pd.merge(df, balance_df,     on=list(set(df.columns).intersection(set(balance_df.columns))), how='outer')
+
+		cashflow_df.insert(0, 'Quarter end',
+			cashflow_df['Fiscal Year'].astype(str) + \
+			cashflow_df['Fiscal Period'].apply(lambda p : get_quarter_str(p)))
+		df, cashflow_df = combine_overlapping_columns(df, cashflow_df)
+		df = pd.merge(df, cashflow_df,    on=list(set(df.columns).intersection(set(cashflow_df.columns))), how='outer')
+
+		# drop uneccessary columns and make NaNs "None"
+		df.drop(columns=['Ticker', 'SimFinId', 'Currency', 'Fiscal Year', 'Fiscal Period'], inplace=True)
+		df.fillna('None', inplace=True)
 
 		if save:
 
@@ -203,17 +315,6 @@ class StockPup:
 
 		return df
 
-	''' download_csv_file
-		Returns:
-			pandas dataframe of csv file at url
-		Arguments:
-			url - string - url where the csv can be downloaded
-		'''
-	def download_csv_file(self, url):
-		time.sleep(2.5) # don't overload server
-		data = requests.get(url)
-		return pd.read_csv(StringIO(str(data.content, 'utf-8')))
-
 	''' append_new_data_to_old_data
 		Returns:
 			pandas dataframe of old and new data combined
@@ -222,41 +323,49 @@ class StockPup:
 			filepath - string - local path to old data
 		'''
 	def append_new_data_to_old_data(self, df, filepath):
-		df0 = pd.read_csv(filepath, index_col=[0])
-		# print('data from local\t', df0.shape)
-		most_recent_quarter_df0 = df0['Quarter end'].iloc[0]
+		try:
+			df0 = pd.read_csv(filepath, index_col=[0])
+			file_found = True
+		except FileNotFoundError:
+			file_found = False
 
-		# # verify the quarters line up
-		# if not df['Quarter end'].isin([most_recent_quarter_df0]).any():
-		# 	print('The most recent quarter in the old data is not in the new data.')
-		# 	print('Aborting appending the new data to the old data.')
-		# 	return df0
-		''' NOTE:
-			this is commented out because I decided if the quarters don't
-			line up its better to get the data we CAN get, and have a gap.
-			'''
-		df = df[df['Quarter end'] > most_recent_quarter_df0]
+		if file_found:
 
-		# # verify theres no NaN values in the new df
-		# row_indeces_to_drop = []
-		# for index, quarter_series in df.iterrows():
-		# 	number_of_nans_this_quarter = \
-		# 		quarter_series[quarter_series == 'None'].shape[0]
-		# 	if number_of_nans_this_quarter > 0:
-		# 		row_indeces_to_drop.append(index)
-		# # if len(row_indeces_to_drop) > 0: # either drop everything if theres any "None" values
-		# # 	print('\"None\" values in new data,')
-		# # 	print('Aborting appending the new data to the current data.')
-		# # 	return df0
-		# df.drop(row_indeces_to_drop) # or only drop the rows with "None" values
-		''' NOTE:
-			this is commented out because I decided if there are "None" values
-			in the new data its better to get the data we CAN get, and have a "None" values.
-			'''
+			# print('data from local\t', df0.shape)
+			most_recent_quarter_df0 = df0['Quarter end'].iloc[0]
 
-		# append, save, and return the new and old data
-		df = df.append(df0, sort=False)
-		df = df.reset_index(drop=True)
+			# # verify the quarters line up
+			# if not df['Quarter end'].isin([most_recent_quarter_df0]).any():
+			# 	print('The most recent quarter in the old data is not in the new data.')
+			# 	print('Aborting appending the new data to the old data.')
+			# 	return df0
+			''' NOTE:
+				this is commented out because I decided if the quarters don't
+				line up its better to get the data we CAN get, and have a gap.
+				'''
+			df = df[df['Quarter end'] > most_recent_quarter_df0]
+
+			# # verify theres no NaN values in the new df
+			# row_indeces_to_drop = []
+			# for index, quarter_series in df.iterrows():
+			# 	number_of_nans_this_quarter = \
+			# 		quarter_series[quarter_series == 'None'].shape[0]
+			# 	if number_of_nans_this_quarter > 0:
+			# 		row_indeces_to_drop.append(index)
+			# # if len(row_indeces_to_drop) > 0: # either drop everything if theres any "None" values
+			# # 	print('\"None\" values in new data,')
+			# # 	print('Aborting appending the new data to the current data.')
+			# # 	return df0
+			# df.drop(row_indeces_to_drop) # or only drop the rows with "None" values
+			''' NOTE:
+				this is commented out because I decided if there are "None" values
+				in the new data its better to get the data we CAN get, and have a "None" values.
+				'''
+
+			# append, save, and return the new and old data
+			df = df.append(df0, sort=False)
+			df = df.reset_index(drop=True)
+
 		df.to_csv(filepath)
 		return df
 
@@ -390,6 +499,9 @@ class StockPup:
 		assets = self.get_data_of_all_assets('local')
 		num_assets = len(assets.keys())
 		num_fields = list(assets.values())[0].shape[1]
+		cols = list(assets.values())[0].columns
+		print(cols)
+		print(len(cols))
 
 		quarters, num_quarters, earliest_quarter, latest_quarter = \
 			get_quarters(assets, verbose=verbose)
@@ -475,9 +587,9 @@ class StockPup:
 
 if __name__ == '__main__':
 
-	stockpup = StockPup()
+	simfin_scrapper = SimFinScrapper()
 
-	# assets = stockpup.get_data_of_all_assets('web')
-	stockpup.plot_data_quality_report()
+	# assets = simfin_scrapper.get_data_of_all_assets('web')
+	simfin_scrapper.plot_data_quality_report()
 
 
