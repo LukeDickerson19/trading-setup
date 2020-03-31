@@ -6,6 +6,16 @@ DESCRIPTION:
 EXCHANGES AND DATA SOURCES:
 
 	Poloniex:
+
+	Kraken:
+
+		SOURCES:
+
+			API Docs:
+			https://www.kraken.com/en-us/features/api
+
+			Github python wrapper:
+			https://github.com/veox/python3-krakenex
 	
 	Alpaca:
 		

@@ -16,6 +16,16 @@
 				"secret_key" : ""
 			}
 		},
+		"kraken" : {
+			"account1" : {
+				"username" : "",
+				"public_account_id" : "",
+				"email" : "",
+				"api_key" : "",
+				"private_key" : "",
+				"key_description" : ""
+			}
+		},
 		"alpaca" : {
 			"account1" : {
 				"email"      : "",

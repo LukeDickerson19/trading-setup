@@ -10,6 +10,7 @@ def createTimeStamp(datestr, format="%Y-%m-%d %H:%M:%S"):
 
 
 class Poloniex:
+
     def __init__(self, APIKey, Secret):
         self.APIKey = APIKey
         self.Secret = Secret
@@ -71,6 +72,8 @@ class Poloniex:
 
     def returnMarketTradeHistory(self, currencyPair):
         return self.api_query("returnMarketTradeHistory", {'currencyPair': currencyPair})
+
+
 
 
     # Returns all of your balances.
