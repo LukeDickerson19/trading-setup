@@ -16,7 +16,7 @@ EXCHANGES AND DATA SOURCES:
 
 			Github python wrapper:
 			https://github.com/veox/python3-krakenex
-	
+
 	Alpaca:
 		
 		https://alpaca.markets/
