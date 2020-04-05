@@ -38,6 +38,14 @@ EXCHANGES AND DATA SOURCES:
 			https://app.alpaca.markets/internal/accounts/c518ee6d-9da7-492c-bd18-ef21c488c94a/agreements/nasdaq/preview
 			https://app.alpaca.markets/internal/accounts/c518ee6d-9da7-492c-bd18-ef21c488c94a/agreements/nyse/preview
 
+		SOURCES:
+
+			Step by Step Tutorial Videos - Paper Trading with the Alpaca API
+			https://alpaca.markets/docs/get-started-with-alpaca/tutorial-videos/
+
+			alpaca-trade-api-python
+			https://github.com/alpacahq/alpaca-trade-api-python
+
 	StockPup:	
 
 		DESCRIPTION:

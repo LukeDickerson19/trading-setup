@@ -53,7 +53,7 @@ class Kraken:
 	def get_recent_trades(self, currency_pair):
 		url = self.base_url + '/public/Trades'
 		data = {
-			'pair' : currency_pair
+			'pair' : currency_pair,
 		}
 		response = requests.post(url, params=data)
 		recent_trades = json.loads(response.text)['result'][currency_pair]
@@ -84,7 +84,7 @@ class Kraken:
 		order_book = json.loads(response.text)['result'][currency_pair]
 		return order_book
 
-	''' scrap_orderbook_and_recent_trades
+	''' get_orderbook_and_recent_trades
 		Returns:
 			{
 				'order_book' : {
@@ -103,7 +103,7 @@ class Kraken:
 			start_time_dt - datetime object - get all trades that occured between start_time_dt and now
 				if the API fails 
 		'''
-	def scrap_orderbook_and_recent_trades(self, currency_pair, start_minutes_timedelta, filename):
+	def get_orderbook_and_recent_trades(self, currency_pair, start_minutes_timedelta, filename):
 
 		# get orderbook and recent trades data
 		now = datetime.now(timezone.utc)
@@ -139,6 +139,112 @@ class Kraken:
 		# return data
 		return ret
 
+	''' get_price_history
+		Returns:
+			list of OHLC data. Format: [(open, high, low, close, volume_weighted_average_price, volume), ...]
+		Arguments:
+			currency_pair - string - format: 'X'+coin1+'Z'+coin2, ex: 'XXBTZUSD'
+			start_time_dt - datetime - end time of data
+			end_time_dt - datetime - end time of data
+			interval - int? - time frame interval in minutes.
+				valid values:
+					1     - 1 min (default)
+					5     - 5 min
+					15    - 15 min
+					30    - 30 min
+					60    - 1 hr
+					240   - 4 hrs
+					1440  - 1 day
+					10080 - 1 week
+					21600 - 2week (15 days actually)
+			verbose - boolean - wether to price the return value to the console or not
+		'''
+	def get_price_history(self, currency_pair, start_time_dt, end_time_dt, interval, verbose=False):
+		
+		# get the data from the kraken API, and parse the information you actually want
+		# source: https://www.kraken.com/en-us/features/api#get-ohlc-data
+		# raw format: [[<time>, <open>, <high>, <low>, <close>, <vwap>, <volume>, <count>], ...]
+		url = self.base_url + '/public/OHLC'
+		data = {
+			'pair'     : currency_pair,
+			'interval' : interval,
+			'since'    : start_time_dt.timestamp()
+		}
+		response = requests.post(url, params=data)
+		price_data = json.loads(response.text)['result'][currency_pair]
+		price_data = {data[0] : list(map(lambda p : float(p), data[1:])) for data in price_data}
+
+		# kraken's get OHLC API call gets data from start_time to present
+		# so clip off the data after end_time
+		price_data = dict(filter(lambda kv_tuple : kv_tuple[0] <= end_time_dt.timestamp(), price_data.items()))		
+
+		if verbose:
+			for k, v in price_data.items():
+				print(k, v)
+
+		return price_data
+
+	''' get_price_windows
+		Returns:
+			dictionary
+				key - int - unixtime
+				value - list of floats - list of prices in window at the given unixtime, price at index 0 is the most recent
+		Arguments:
+			price_data - see return of get_price_history
+			windows - list of ints - time window frames to return
+			verbose - boolean - wether to price the return value to the console or not
+		'''
+	def get_price_windows(self, price_data, windows, verbose=False):
+		prc_dta = [[dt, data[4]] for dt, data in price_data.items()] # use data[4]: volume_weighted_average_price
+		price_windows = {w : \
+			{prc_dta[i-1][0] : \
+				list(map(lambda e : e[1], prc_dta[i-w:i])) \
+				for i in range(w, len(prc_dta)+1)}
+					for w in windows}
+		if verbose:
+			for w in windows:
+				print(w)
+				input()
+				for k, v in price_windows[w].items():
+					print(k, v)
+				input()
+		return price_windows
+
+	''' stochastic_oscillator_historic
+		Returns:
+			dicitonary
+				key - int - unixtime
+				value - float - current value of stochastic oscillator
+					how to calculate it: https://www.investopedia.com/terms/s/stochasticoscillator.asp
+		Arguments:
+			price_windows - see return of get_price_windows
+			verbose - boolean - wether to price the return value to the console or not
+		'''
+	def stochastic_oscillator_historic(self, price_windows, verbose=False):
+		stochastic_oscillator_historic = {}
+		for w, price_ws in price_windows.items():
+			stochastic_oscillator_historic[w] = {}
+			for ut, price_w in price_ws.items():
+				stochastic_oscillator_historic[w][ut] = self.stochastic_oscillator_current(price_w)
+		if verbose:
+			for w, price_ws in price_windows.items():
+				print('window', w)
+				input()
+				for ut, _ in price_ws.items():
+					print(ut, '\t', stochastic_oscillator_historic[w][ut])
+				input()
+		return stochastic_oscillator_historic
+
+	''' stochastic_oscillator_current
+		Returns:
+			float - stockastic oscillator of price_w
+		Arguments:
+			price_w - list of floats - price window
+			verbose - boolean - wether to price the return value to the console or not
+		'''
+	def stochastic_oscillator_current(self, price_w, verbose=False):
+
+		return 100 * (price_w[0] - min(price_w)) / (max(price_w) - min(price_w))
 
 if __name__ == '__main__':
 
@@ -147,9 +253,27 @@ if __name__ == '__main__':
 	coin1, coin2 = 'XBT', 'USD'
 	currency_pair = 'X' + coin1 + 'Z' + coin2 # ex: 'XXBTZEUR'
 	filename = '%s_%s_order_books_and_trades.json' % (coin1, coin2)
-	start_minutes_timedelta = 5
-	ret = kraken.scrap_orderbook_and_recent_trades(
-		currency_pair, start_minutes_timedelta, filename)
-	json.dump(ret, sys.stdout, indent=4)
+
+	# # test get_orderbook_and_recent_trades
+	# start_minutes_timedelta = 5
+	# ret = kraken.get_orderbook_and_recent_trades(
+	# 		currency_pair,
+	# 		start_minutes_timedelta,
+	# 		filename)
+	# json.dump(ret, sys.stdout, indent=4)
+
+
+	# test get_price_history()
+	start_time_dt = datetime(2019, 8, 1, tzinfo=timezone.utc) # datetime(year, month, day, hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+	end_time_dt   = datetime(2020, 3, 1, tzinfo=timezone.utc) # datetime(year, month, day, hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+	interval = 1440 # 1 day
+	price_data = kraken.get_price_history(currency_pair, start_time_dt, end_time_dt, interval)
+
+	# test get_price_windows()
+	windows = [10, 100]
+	price_windows = kraken.get_price_windows(price_data, windows)
+
+	# test stochastic_oscillator_historic() and stochastic_oscillator_current()
+	indicator = kraken.stochastic_oscillator_historic(price_windows, verbose=True)
 
 
