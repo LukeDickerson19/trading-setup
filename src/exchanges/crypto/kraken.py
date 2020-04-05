@@ -4,6 +4,8 @@ import subprocess
 import requests
 import json
 import time
+import numpy as np
+import pandas as pd
 from datetime import datetime, timezone, timedelta
 import pathlib
 SCRIPT_PATH         = pathlib.Path(__file__).resolve()
@@ -157,7 +159,7 @@ class Kraken:
 					1440  - 1 day
 					10080 - 1 week
 					21600 - 2week (15 days actually)
-			verbose - boolean - wether to price the return value to the console or not
+			verbose - boolean - whether to price the return value to the console or not
 		'''
 	def get_price_history(self, currency_pair, start_time_dt, end_time_dt, interval, verbose=False):
 		
@@ -184,6 +186,49 @@ class Kraken:
 
 		return price_data
 
+	''' get_percent_change_history
+		Returns:
+			list of percent change from previous price. Format: [(percent_change, volume_weighted_average_price, volume), ...]
+		Arguments:
+			currency_pair - string - format: 'X'+coin1+'Z'+coin2, ex: 'XXBTZUSD'
+			start_time_dt - datetime - end time of data
+			end_time_dt - datetime - end time of data
+			interval - int? - time frame interval in minutes.
+				valid values:
+					1     - 1 min (default)
+					5     - 5 min
+					15    - 15 min
+					30    - 30 min
+					60    - 1 hr
+					240   - 4 hrs
+					1440  - 1 day
+					10080 - 1 week
+					21600 - 2week (15 days actually)
+			verbose - boolean - whether to price the return value to the console or not
+		'''
+	def get_percent_change_history(self, currency_pair, start_time_dt, end_time_dt, interval, verbose=False):
+
+		# get price data
+		price_data = self.get_price_history(currency_pair, start_time_dt, end_time_dt, interval)
+
+		# get percent change of each price from the previous price
+		# clip the first price with no previous price to calculate percent change
+		percent_change_data = {}
+		prev_price = None
+		for ut, data in price_data.items():
+			price = data[4] # use: volume_weighted_average_price
+			if prev_price == None:
+				prev_price = price
+				continue
+			percent_change_data[ut] = (100.0 * (price - prev_price) / prev_price, price)
+			prev_price = price
+
+		if verbose:
+			for ut, pct_chng in percent_change_data.items():
+				print(ut, '\t', pct_chng)
+
+		return percent_change_data
+
 	''' get_price_windows
 		Returns:
 			dictionary
@@ -192,7 +237,7 @@ class Kraken:
 		Arguments:
 			price_data - see return of get_price_history
 			windows - list of ints - time window frames to return
-			verbose - boolean - wether to price the return value to the console or not
+			verbose - boolean - whether to price the return value to the console or not
 		'''
 	def get_price_windows(self, price_data, windows, verbose=False):
 		prc_dta = [[dt, data[4]] for dt, data in price_data.items()] # use data[4]: volume_weighted_average_price
@@ -210,41 +255,100 @@ class Kraken:
 				input()
 		return price_windows
 
-	''' stochastic_oscillator_historic
+	''' get_percent_change_windows
+		Returns:
+			dictionary
+				key - int - unixtime
+				value - list of floats - list of percentage changes in window at the given unixtime, price at index 0 is the most recent
+		Arguments:
+			percent_change_data - see return of get_percent_change_history
+			windows - list of ints - time window frames to return
+			verbose - boolean - whether to price the return value to the console or not
+		'''
+	def get_percent_change_windows(self, percent_change_data, window, verbose=False):
+		pct_chng_dta = [[dt, data[0]] for dt, data in percent_change_data.items()]
+		percent_change_windows = {w : \
+			{pct_chng_dta[i-1][0] : \
+				list(map(lambda e : e[1], pct_chng_dta[i-w:i])) \
+				for i in range(w, len(pct_chng_dta)+1)}
+					for w in windows}
+		if verbose:
+			for w in windows:
+				print(w)
+				input()
+				for k, v in percent_change_windows[w].items():
+					print(k, v)
+				input()
+		return percent_change_windows
+
+	''' indicator_historic
 		Returns:
 			dicitonary
 				key - int - unixtime
-				value - float - current value of stochastic oscillator
-					how to calculate it: https://www.investopedia.com/terms/s/stochasticoscillator.asp
+				value - float - current value of indicator
 		Arguments:
-			price_windows - see return of get_price_windows
-			verbose - boolean - wether to price the return value to the console or not
+			data_windows - see return of get_price_windows or get_percent_change_windows
+			indicator_function - indicator function that takes price_w (list of floats of price window) wrapped in a lambda function
+								 see example in main function
+			verbose - boolean - whether to price the return value to the console or not
 		'''
-	def stochastic_oscillator_historic(self, price_windows, verbose=False):
-		stochastic_oscillator_historic = {}
-		for w, price_ws in price_windows.items():
-			stochastic_oscillator_historic[w] = {}
-			for ut, price_w in price_ws.items():
-				stochastic_oscillator_historic[w][ut] = self.stochastic_oscillator_current(price_w)
+	def indicator_historic(self, data_windows, indicator_function, verbose=False):
+		indicator_historic = {}
+		for w, data_ws in data_windows.items():
+			indicator_historic[w] = {}
+			for ut, data_w in data_ws.items():
+				indicator_historic[w][ut] = indicator_function(data_w)
 		if verbose:
-			for w, price_ws in price_windows.items():
+			for w, data_ws in data_windows.items():
 				print('window', w)
 				input()
-				for ut, _ in price_ws.items():
-					print(ut, '\t', stochastic_oscillator_historic[w][ut])
+				for ut, _ in data_ws.items():
+					print(ut, '\t', indicator_historic[w][ut])
 				input()
-		return stochastic_oscillator_historic
+		return indicator_historic
 
-	''' stochastic_oscillator_current
+	''' stochastic_oscillator
 		Returns:
 			float - stockastic oscillator of price_w
+					how to calculate it: https://www.investopedia.com/terms/s/stochasticoscillator.asp
 		Arguments:
 			price_w - list of floats - price window
-			verbose - boolean - wether to price the return value to the console or not
+			verbose - boolean - whether to price the return value to the console or not
 		'''
-	def stochastic_oscillator_current(self, price_w, verbose=False):
+	def stochastic_oscillator(self, price_w, verbose=False):
 
 		return 100 * (price_w[0] - min(price_w)) / (max(price_w) - min(price_w))
+
+	''' relative_strength_index
+		Returns:
+			float - relative strength index of pct_chng_W
+					how to calculate it:
+						1. https://www.investopedia.com/terms/r/rsi.asp
+						2. https://en.wikipedia.org/wiki/Relative_strength_index
+						3. https://www.fidelity.com/learning-center/trading-investing/technical-analysis/technical-indicator-guide/RSI
+					theres conflicting examples on how to calculate it, i went with link 3.
+		Arguments:
+			pct_chng_w - list of floats - percent change window
+			verbose - boolean - whether to price the return value to the console or not
+		'''
+	def relative_strength_index(self, pct_chng_w, verbose=False):
+		
+		average_gain = np.array(list(filter(lambda pct_chng : pct_chng > 0.0, pct_chng_w))).mean()
+		average_loss = np.array(list(filter(lambda pct_chng : pct_chng < 0.0, pct_chng_w))).mean()
+
+		# average_gain = np.array(list(filter(lambda pct_chng : pct_chng > 0.0, pct_chng_w[1:]))).mean()
+		# average_loss = np.array(list(filter(lambda pct_chng : pct_chng < 0.0, pct_chng_w[1:]))).mean()
+		# average_gain = 1.0 * pct_chng[0] + (len(pct_chng_w) - 1) * average_gain
+		# average_loss = 1.0 * pct_chng[0] + (len(pct_chng_w) - 1) * average_loss
+
+		rs = average_gain / abs(average_loss)
+		rsi1 = 100.0 - (100.0 / (1.0 + rs))
+		rsi2 = None
+		return rsi1
+
+
+
+
 
 if __name__ == '__main__':
 
@@ -263,17 +367,38 @@ if __name__ == '__main__':
 	# json.dump(ret, sys.stdout, indent=4)
 
 
-	# test get_price_history()
+	# test get_price_history() and get_percent_change_history()
 	start_time_dt = datetime(2019, 8, 1, tzinfo=timezone.utc) # datetime(year, month, day, hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
 	end_time_dt   = datetime(2020, 3, 1, tzinfo=timezone.utc) # datetime(year, month, day, hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
 	interval = 1440 # 1 day
-	price_data = kraken.get_price_history(currency_pair, start_time_dt, end_time_dt, interval)
+	price_data = kraken.get_price_history(
+		currency_pair,
+		start_time_dt,
+		end_time_dt,
+		interval,
+		verbose=False)
+	percent_change_data = kraken.get_percent_change_history(
+		currency_pair,
+		start_time_dt,
+		end_time_dt,
+		interval,
+		verbose=False)
 
-	# test get_price_windows()
+	# test get_price_windows() and get_percent_change_windows()
 	windows = [10, 100]
-	price_windows = kraken.get_price_windows(price_data, windows)
+	price_windows = kraken.get_price_windows(
+		price_data, windows)
+	percent_change_windows = kraken.get_percent_change_windows(
+		percent_change_data, windows, verbose=False)
 
-	# test stochastic_oscillator_historic() and stochastic_oscillator_current()
-	indicator = kraken.stochastic_oscillator_historic(price_windows, verbose=True)
+	# test stochastic_oscillator
+	so = kraken.indicator_historic(
+		price_windows,
+		lambda price_w : kraken.stochastic_oscillator(price_w),
+		verbose=False)
 
-
+	# test relative_strength_index()
+	rsi = kraken.indicator_historic(
+		percent_change_windows,
+		lambda pct_chng_w : kraken.relative_strength_index(pct_chng_w),
+		verbose=True)
