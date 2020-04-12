@@ -19,6 +19,7 @@
 		"kraken" : {
 			"account1" : {
 				"username" : "",
+				"password" : "",
 				"public_account_id" : "",
 				"email" : "",
 				"api_key" : "",

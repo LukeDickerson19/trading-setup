@@ -546,7 +546,6 @@ class SimFinScrapper:
 			quarter = quarters[int(x)]
 			_y, _m, _d = tuple(quarter.split('-'))
 			quarter_label = '%s Q%d' % (_y, (int(_m) / 3))
-			# data_coverage_this_quarter = data_coverage_dct[ticker][]
 			num_quarters_with_nonzero_coverage = data_coverage_dct[ticker][0]
 			quarter_values_with_nonzero_coverage = \
 				list(filter(lambda coverage : coverage > 0.0, data_coverage_dct[ticker][1]))

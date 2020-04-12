@@ -18,6 +18,8 @@ EXCHANGES AND DATA SOURCES:
 			https://github.com/veox/python3-krakenex
 
 	Alpaca:
+
+		aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 		
 		https://alpaca.markets/
 		commission free
