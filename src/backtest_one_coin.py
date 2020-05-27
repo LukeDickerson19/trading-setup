@@ -285,7 +285,8 @@ class Strat:
             total_indent1 = ''.join([indent] * (num_indents + 1))
             if new_line_start:
                 print(total_indent1 if DRAW_LINE else total_indent0, file=out_loc)
-            print(total_indent0 + string, file=out_loc)
+            for s in string.split('\n'):
+                print(total_indent0 + s, file=out_loc)
             if new_line_end:
                 print(total_indent1 if DRAW_LINE else total_indent0, file=out_loc)
 
@@ -709,6 +710,7 @@ class StratUnitTests:
     def __init__(self):
 
         self.logfile_path = UNITTEST_LOGFILE_PATH
+ 
     def pprint(self, string='',
         num_indents=0,
         new_line_start=False,
@@ -720,7 +722,8 @@ class StratUnitTests:
             total_indent1 = ''.join([indent] * (num_indents + 1))
             if new_line_start:
                 print(total_indent1 if DRAW_LINE else total_indent0, file=out_loc)
-            print(total_indent0 + string, file=out_loc)
+            for s in string.split('\n'):
+                print(total_indent0 + s, file=out_loc)
             if new_line_end:
                 print(total_indent1 if DRAW_LINE else total_indent0, file=out_loc)
 
