@@ -29,16 +29,17 @@ import numpy as np
 
     TO DO
         NOW
+            track p/l (quantity and percent) of open positions (which is required anyway for forced liquidation)
             unit test it
                 build out and test the rest of the order functions
                     next
-                        test_enter_long_limit_order
-                        test_enter_short_limit_order
-                        test_exit_long_limit_order
-                        test_exit_short_limit_order
                         test_leverage
+                            make sure all order functions work with new margin collateral vasriable
                         test_forced_liquidation
+                        test_update_open_orders
+                        test_trading_fee
             push it to github
+            make it a parent class
             start coding strategy
         EVENTUALLY
             finish hello_world.py
@@ -50,6 +51,22 @@ import numpy as np
     SOURCES
 
         none
+
+    ALTERNATIVES:
+
+        has shorting but doesn't have exchange and margin accounts separated
+        https://github.com/enigmampc/catalyst
+            Docs: https://www.enigma.co/catalyst/index.html
+
+        has shorting but doesn't have exchange and margin accounts separated
+        https://github.com/anfederico/Gemini
+            docs: https://gemini-docs.readthedocs.io/en/latest/
+
+            mean revision algo has promissing returns
+                https://gemini-docs.readthedocs.io/en/latest/using-gemini.html#advanced
+
+        https://www.reddit.com/r/algotrading/comments/bnq5cn/cryptocurrency_backtesting/
+            https://gekko.wizb.it/
 
     '''
 
@@ -122,8 +139,10 @@ class Strat:
                 COIN2 : 0.0                       # initial quantity of money (in COIN2) in the Exchange account
             },
             'margin' : {
-                COIN1 : margin_start_quantity,    # initial quantity of money (in COIN1) in the Margin account (aka collateral)
-                COIN2 : 0.0                       # initial quantity of money (in COIN2) in the Margin account (+ is long, - is short)
+                'collateral' : margin_start_quantity,         # initial quantity of money (in COIN1) in the Margin account (aka collateral)
+                'debt': {COIN1 : 0.0, COIN2 : 0.0}            # initial quantity of money in the Margin account that has been borrowed
+                COIN1 : margin_start_quantity * MAX_LEVERAGE, # initial quantity of money (in COIN1) in Margin account that can be borrowed
+                COIN2 : 0.0                                   # initial quantity of money (in COIN2) in the Margin account (+ is long, - is short)
             }
         }
         self.portfolio = {
@@ -132,8 +151,10 @@ class Strat:
                 COIN2 : [self.portfolio_init['exchange'][COIN2]]  # current quantity of money (in COIN2) in the Exchange account
             },
             'margin' : {
-                COIN1 : [self.portfolio_init['margin'][COIN1]],   # current quantity of money (in COIN1) in the Margin account (aka collateral)
-                COIN2 : [self.portfolio_init['margin'][COIN2]]    # current quantity of money (in COIN2) in the Margin account (+ is long, - is short)
+                'collateral' : [self.portfolio_init['margin']['collateral']], # current quantity of money (in COIN1) in the Margin account (aka collateral)
+                'debt'       : [self.portfolio_init['margin']['debt']],       # current quantity of money in the Margin account that has been borrowed
+                COIN1        : [self.portfolio_init['margin'][COIN1]],        # current quantity of money (in COIN1) in Margin account that can be borrowed
+                COIN2        : [self.portfolio_init['margin'][COIN2]]         # current quantity of money (in COIN2) in the Margin account (+ is long, - is short)
             }
         }
         self.portfolio_update_reset()
@@ -141,6 +162,13 @@ class Strat:
         # dict:
         # key = order_id
         # value = [account_type(str), long_or_short(str), enter_or_exit(str), quantity(float), limit_price(float), percent(boolean)]
+        # self.open_positions = {
+        #     'exchange' : [],
+        #     'margin' :   []
+        # }
+        # # dict:
+        # # value: (dict with keys): long_or_short(str), quantity(float), enter_price(float)
+        self.margin_coin1_debt
 
         self.reset(
             exchange_start_quantity,
@@ -261,7 +289,9 @@ class Strat:
         pass
 
         ########################################################################################################################################
-    def portfolio_update_reset(self, verbose=False, num_indents=0):
+    def portfolio_update_reset(self,
+        verbose=False, num_indents=0):
+        
         if verbose: self.pprint('Setting portfolio_update to zero.', num_indents=num_indents)
         self.portfolio_update =  {
             'exchange' : {
@@ -269,8 +299,9 @@ class Strat:
                 COIN2 : 0.0
             },
             'margin' : {
-                COIN1 : 0.0,
-                COIN2 : 0.0
+                'collateral' : 0.0,
+                COIN1        : 0.0,
+                COIN2        : 0.0
             }
         }
         if verbose: self.pprint('Successful.', num_indents=num_indents)
@@ -376,9 +407,9 @@ class Strat:
             self.update()
             input()
         print('Backtest Complete')
-    def update(self, verbose=False, num_indents=0):
+    def update(self,
+        verbose=False, num_indents=0):
 
-        self.t += 1
         self.unix_date, self.date, self.price, self.pct_chg = self.df.iloc[self.t]
         t, unix_date, date, price, pct_chg = self.t, self.unix_date, self.date, self.price, self.pct_chg
         # if verbose: self.pprint('%d   %s   %s   %.6f %s/%s    %.1f %%' % (
@@ -407,51 +438,128 @@ class Strat:
         self.pprint('Update Complete.', num_indents=num_indents)
 
     # place order
-    def order(self, exchange_or_margin, enter_or_exit, long_or_short, quantity, percent=False, limit_price=None):
+    def order(self,
+        exchange_or_margin,
+        enter_or_exit,
+        long_or_short,
+        quantity,
+        percent=False,
+        limit_price=None,
+        verbose=False,
+        num_indents=0):
+
         if exchange_or_margin == 'exchange':
-            self.exchange_order(enter_or_exit, long_or_short, quantity, percent=percent, limit_price=limit_price)
+            return self.exchange_order(
+                enter_or_exit, long_or_short, quantity,
+                percent=percent, limit_price=limit_price,
+                verbose=verbose, num_indents=num_indents)
         elif exchange_or_margin == 'margin':
-            self.margin_order(enter_or_exit, long_or_short, quantity, leverage=leverage, percent=percent, limit_price=limit_price)
+            return self.margin_order(
+                enter_or_exit, long_or_short, quantity,
+                leverage=leverage, percent=percent, limit_price=limit_price,
+                verbose=verbose, num_indents=num_indents)
         else:
             return None, 'Invalid input for exchange_or_margin'
-    def exchange_order(self, enter_or_exit, long_or_short, quantity, percent=False, limit_price=None):
+    def exchange_order(self,
+        enter_or_exit,
+        long_or_short,
+        quantity,
+        percent=False,
+        limit_price=None,
+        verbose=False,
+        num_indents=0):
+        
         if enter_or_exit == 'enter':
             if long_or_short == 'long':
-                return self.enter_long('exchange', quantity, percent=percent, limit_price=limit_price)
+                return self.enter_long(
+                    'exchange', quantity,
+                    percent=percent, limit_price=limit_price,
+                    verbose=verbose, num_indents=num_indents)
             else:
                 return None, 'Invalid input for long_or_short'
         elif enter_or_exit == 'exit':
             if long_or_short == 'long':
-                return self.exit_long('exchange', quantity, percent=percent, limit_price=limit_price)
+                return self.exit_long(
+                    'exchange', quantity,
+                    percent=percent, limit_price=limit_price,
+                    verbose=verbose, num_indents=num_indents)
             else:
                 return None, 'Invalid input for long_or_short'
         else:
             return None, 'Invalid input for enter_or_exit'
-    def margin_order(self, enter_or_exit, long_or_short, quantity, percent=False, limit_price=None):
+    def margin_order(self,
+        enter_or_exit,
+        long_or_short,
+        quantity,
+        percent=False,
+        limit_price=None,
+        verbose=False,
+        num_indents=0):
+
+        # if enter long order and we're currently short
         if enter_or_exit == 'enter':
             if long_or_short == 'long':
-                return self.enter_long('margin', quantity, percent=percent, limit_price=limit_price)
+                pass
+                # if we're currently short
+                    # if quantity is less than or equal to quantity that we're in short
+                        # exit that quantity of the short
+                    # else its more
+                        # exit our short position entirely and enter long the difference
+
             elif long_or_short == 'short':
-                return self.enter_short('margin', quantity, percent=percent, limit_price=limit_price)
+                pass
+                # if we're currently long
+                    # if quantity is less than or equal to quantity that we're in long
+                        # exit that quantity of the long
+                    # else its more
+                        # exit our long position entirely and enter short the difference
+
+        if enter_or_exit == 'enter':
+            if long_or_short == 'long':
+                return self.enter_long(
+                    'margin', quantity,
+                    percent=percent, limit_price=limit_price,
+                    verbose=verbose, num_indents=num_indents)
+            elif long_or_short == 'short':
+                return self.enter_short(
+                    'margin', quantity,
+                    percent=percent, limit_price=limit_price,
+                    verbose=verbose, num_indents=num_indents)
             else:
                 return None, 'Invalid input for long_or_short'
         elif enter_or_exit == 'exit':
             if long_or_short == 'long':
-                return self.exit_long('margin', quantity, percent=percent, limit_price=limit_price)
+                return self.exit_long(
+                    'margin', quantity,
+                    percent=percent, limit_price=limit_price,
+                    verbose=verbose, num_indents=num_indents)
             elif long_or_short == 'short':
-                return self.exit_short('margin', quantity, percent=percent, limit_price=limit_price)
+                return self.exit_short(
+                    'margin', quantity,
+                    percent=percent, limit_price=limit_price,
+                    verbose=verbose, num_indents=num_indents)
             else:
                 return None, 'Invalid input for long_or_short'
         else:
             return None, 'Invalid input for enter_or_exit'
 
-    def enter_long(self, account_type, quantity, percent=False, limit_price=None):
+    # execute long orders
+    def enter_long(self,
+        account_type,
+        quantity,
+        percent=False,
+        limit_price=None,
+        verbose=False,
+        num_indents=0):
+
         if limit_price == None: # market order
             return self.enter_long_market_order(
-                account_type, quantity, percent=percent)
+                account_type, quantity, percent=percent,
+                verbose=verbose, num_indents=num_indents)
         elif isinstance(limit_price, float): # limit order
             return self.enter_long_limit_order(
-                account_type, quantity, limit_price, percent=percent)
+                account_type, quantity, limit_price, percent=percent,
+                verbose=verbose, num_indents=num_indents)
         else:
             return None, 'Invalid input for limit_price'
     def enter_long_market_order(self,
@@ -477,28 +585,90 @@ class Strat:
                 account_type, COIN1, COIN2, quantity,
                 verbose=verbose, num_indents=num_indents+1)
 
-        coin1_cost = quantity * self.price # trading fee is not added back on here because thats done in the transfer function
-        coin2_gain = quantity
-        _, trade_message = self.trade(account_type, COIN1, coin1_cost, COIN2, coin2_gain, verbose=verbose, num_indents=num_indents+1)
+        # exit short if theres anything short
+        quantity_short = self.portfolio['margin'][COIN2][-1]
+        if account_type == 'margin' and quantity_short < 0:
+            if quantity <= abs(quantity_short):
+                self.pprint('Currently short %.6f %s. Converting enter long to exit short' % (
+                    quantity_short, COIN2), num_indents=num_indents+1, new_line_start=True)
+                _, trade_message = self.exit_short_market_order(
+                    account_type,
+                    quantity,
+                    verbose=verbose,
+                    num_indents=num_indents+1)
+                quantity = 0
+            else: # quantity > quantity_short
+                self.pprint('Currently short %.6f %s. Exiting short and decreasing quantity' % (
+                    quantity_short, COIN2), num_indents=num_indents+1, new_line_start=True)
+                self.exit_short_market_order(
+                    account_type,
+                    abs(quantity_short),
+                    verbose=verbose,
+                    num_indents=num_indents+1)
+                quantity -= abs(quantity_short)
+                self.pprint('quantity decreased to %.6f %s' % (
+                    quantity, COIN2), num_indents=num_indents+1)
+
+        if quantity > 0:
+            coin1_cost = quantity * self.price # trading fee is not added back on here because thats done in the transfer function
+            coin2_gain = quantity
+            _, trade_message = self.trade(account_type, COIN1, coin1_cost, COIN2, coin2_gain, verbose=verbose, num_indents=num_indents+1)
+            # self.open_positions[account_type].append({
+            #     'long_or_short' : 'short',
+            #     'coin1_cost'    : coin1_cost,
+            #     'quantity'      : quantity,
+            #     'enter_price'   : self.price
+            # })
+            self.open_positions_total_coin1_cost += coin1_cost
+
         self.pprint('Enter Long %s.' % ('Succeeded' if trade_message == 'Trade Successful.' else 'Failed'), num_indents=num_indents)
         return None, trade_message
-    def enter_long_limit_order(self, account_type, quantity, limit_price, percent=False):
+    def enter_long_limit_order(self,
+        account_type,
+        quantity,
+        limit_price,
+        percent=False,
+        verbose=False,
+        num_indents=0):
 
-        # self.pprint('limit_price ........... %s' % (
-        #     ('%.6f %s' % (limit_price, COIN1)) if limit_price != None else 'None'),
-        #     num_indents=num_indents+1)
+        self.pprint('Entering Long Limit Order', num_indents=num_indents)
+        if verbose:
+            self.pprint('account_type .......... %s' % account_type, num_indents=num_indents+1)
+            self.pprint('percent ............... %s' % percent, num_indents=num_indents+1)
+            self.pprint('quantity .............. %s %s' % (
+                (100*quantity) if percent else quantity,
+                '%' if percent else COIN2),
+                num_indents=num_indents+1)
+            self.pprint('limit_price ........... %s %s/%s' % (limit_price, COIN1, COIN2), num_indents=num_indents+1)
 
-        if self.price <= limit_price:
-            return self.enter_long_market_order(account_type, quantity, percent=percent)
-        order_id = self.get_order_id()
-        self.open_orders[order_id] = [account_type, 'long', 'enter', quantity, limit_price, percent]
-        return order_id, 'Created open limit order'
+        if limit_price >= self.price:
+            if verbose: self.pprint('\nlimit_price is more than current price of %.6f %s/%s, entering at current price ...' % (
+                    self.price, COIN1, COIN2), num_indents=num_indents+1)
+            order_id, trade_message = self.enter_long_market_order(
+                account_type, quantity, percent=percent, verbose=verbose, num_indents=num_indents+1)
+            if verbose: self.pprint('Enter Limit Long %s.' % ('Succeeded' if trade_message == 'Trade Successful.' else 'Failed'), num_indents=num_indents)
+            return order_id, trade_message
+        else:
+            order_id = self.get_order_id()
+            self.open_orders[order_id] = [account_type, 'long', 'enter', quantity, limit_price, percent]
+            if verbose: self.pprint('Created enter long open limit order. order_id: %s' % order_id, num_indents=num_indents)
+            return order_id, 'Created enter long open limit order'
+    def exit_long(self,
+        account_type,
+        quantity,
+        percent=False,
+        limit_price=None,
+        verbose=False,
+        num_indents=0):
 
-    def exit_long(self, account_type, quantity, percent=False, limit_price=None):
         if limit_price == None: # market order
-            return self.exit_long_market_order(account_type, quantity, percent=percent)
+            return self.exit_long_market_order(
+                account_type, quantity, percent=percent,
+                verbose=verbose, num_indents=num_indents)
         elif isinstance(limit_price, float): # limit order
-            return self.exit_long_limit_order(account_type, quantity, limit_price, percent=percent)
+            return self.exit_long_limit_order(
+                account_type, quantity, limit_price, percent=percent,
+                verbose=verbose, num_indents=num_indents)
         else:
             return None, 'Invalid input for limit_price'
     def exit_long_market_order(self,
@@ -523,17 +693,69 @@ class Strat:
             quantity = self.convert_percent_to_quantity(
                 account_type, COIN2, COIN2, quantity,
                 deduct_tf=False, verbose=verbose, num_indents=num_indents+1)
-        
+
         coin2_cost = quantity
         coin1_gain = quantity * self.price
-        return self.trade(account_type, COIN2, coin2_cost, COIN1, coin1_gain, verbose=verbose, num_indents=num_indents)
-    def exit_long_limit_order(self, account_type, quantity, limit_price, percent=False):
-        if self.price >= limit_price:
-            return self.exit_long_market_order(account_type, quantity, percent=percent)
-        order_id = self.get_order_id()
-        self.open_orders[order_id] = [account_type, 'long', 'exit', quantity, limit_price, percent]
-        return order_id, 'Created open limit order'
+        order_id, trade_message = self.trade(account_type, COIN2, coin2_cost, COIN1, coin1_gain, verbose=verbose, num_indents=num_indents)
 
+        # # update collateral (with portfolio update) <-- this requires tracking open positions (which is required anyway for forced liquidation)
+        # if trade_message == 'Trade Successful.' and account_type == 'margin':
+        #     for op in self.open_positions[account_type]:
+        #         op['long_or_short']
+        #         op['quantity']
+        #         op['enter_price']
+
+        return None, trade_message
+    def exit_long_limit_order(self,
+        account_type,
+        quantity,
+        limit_price,
+        percent=False,
+        verbose=False,
+        num_indents=0):
+
+        self.pprint('Exiting Long Limit Order', num_indents=num_indents)
+        if verbose:
+            self.pprint('account_type .......... %s' % account_type, num_indents=num_indents+1)
+            self.pprint('percent ............... %s' % percent, num_indents=num_indents+1)
+            self.pprint('quantity .............. %s %s' % (
+                (100*quantity) if percent else quantity,
+                '%' if percent else COIN2),
+                num_indents=num_indents+1)
+            self.pprint('limit_price ........... %s %s/%s' % (limit_price, COIN1, COIN2), num_indents=num_indents+1)
+
+        if limit_price <= self.price:
+            if verbose: self.pprint('\nlimit_price is less than current price of %.6f %s/%s, exiting at current price ...' % (
+                    self.price, COIN1, COIN2), num_indents=num_indents+1)
+            order_id, trade_message = self.exit_long_market_order(
+                account_type, quantity, percent=percent, verbose=verbose, num_indents=num_indents+1)
+            if verbose: self.pprint('Exit Limit Long %s.' % ('Succeeded' if trade_message == 'Trade Successful.' else 'Failed'), num_indents=num_indents)
+            return order_id, trade_message
+        else:
+            order_id = self.get_order_id()
+            self.open_orders[order_id] = [account_type, 'long', 'exit', quantity, limit_price, percent]
+            if verbose: self.pprint('Created exit long open limit order. order_id: %s' % order_id, num_indents=num_indents)
+            return order_id, 'Created exit long open limit order'
+
+    # execute short orders
+    def enter_short(self,
+        account_type,
+        quantity,
+        percent=False,
+        limit_price=None,
+        verbose=False,
+        num_indents=0):
+
+        if limit_price == None: # market order
+            return self.enter_short_market_order(
+                account_type, quantity, percent=percent,
+                verbose=verbose, num_indents=num_indents)
+        elif isinstance(limit_price, float): # limit order
+            return self.enter_short_limit_order(
+                account_type, quantity, limit_price, percent=percent,
+                verbose=verbose, num_indents=num_indents)
+        else:
+            return None, 'Invalid input for limit_price'
     def enter_short_market_order(self,
         account_type,
         quantity,
@@ -557,12 +779,92 @@ class Strat:
                 account_type, COIN1, COIN2, quantity,
                 verbose=verbose, num_indents=num_indents+1)
 
-        coin1_cost = quantity * self.price # trading fee is not added back on here because thats done in the transfer function
-        coin2_gain = -quantity # NOTE: when you enter a short, COIN2 in the margin account goes - (or subtracts from a previously + value)
-        _, trade_message = self.trade(account_type, COIN1, coin1_cost, COIN2, coin2_gain, verbose=verbose, num_indents=num_indents+1)
+        # exit long if theres anything long
+        quantity_long = self.portfolio['margin'][COIN2][-1]
+        if account_type == 'margin' and quantity_long > 0:
+            if quantity <= quantity_long:
+                self.pprint('Currently long %.6f %s. Converting enter short to exit long' % (
+                    quantity_long, COIN2), num_indents=num_indents+1, new_line_start=True)
+                _, trade_message = self.exit_long_market_order(
+                    account_type,
+                    quantity,
+                    verbose=verbose,
+                    num_indents=num_indents+1)
+                quantity = 0
+            else: # quantity > quantity_long
+                self.pprint('Currently long %.6f %s. Exiting long and decreasing quantity' % (
+                    quantity_long, COIN2), num_indents=num_indents+1, new_line_start=True)
+                self.exit_long_market_order(
+                    account_type,
+                    quantity_long,
+                    verbose=verbose,
+                    num_indents=num_indents+1)
+                quantity -= quantity_long
+                self.pprint('quantity decreased to %.6f %s' % (
+                    quantity, COIN2), num_indents=num_indents+1)
+
+        if quantity > 0:
+            coin1_cost = quantity * self.price # trading fee is not added back on here because thats done in the transfer function
+            coin2_gain = -quantity # NOTE: when you enter a short, COIN2 in the margin account goes - (or subtracts from a previously + value)
+            _, trade_message = self.trade(account_type, COIN1, coin1_cost, COIN2, coin2_gain, verbose=verbose, num_indents=num_indents+1)
+            # self.open_positions[account_type].append({
+            #     'long_or_short' : 'short',
+            #     'coin1_cost'    : coin1_cost,
+            #     'quantity'      : quantity,
+            #     'enter_price'   : self.price
+            # })
+            self.open_positions_total_coin1_cost += coin1_cost
+            
         self.pprint('Enter Short %s.' % ('Succeeded' if trade_message == 'Trade Successful.' else 'Failed'), num_indents=num_indents)
         return None, trade_message
+    def enter_short_limit_order(self,
+        account_type,
+        quantity,
+        limit_price,
+        percent=False,
+        verbose=False,
+        num_indents=0):
 
+        self.pprint('Entering Short Limit Order', num_indents=num_indents)
+        if verbose:
+            self.pprint('account_type .......... %s' % account_type, num_indents=num_indents+1)
+            self.pprint('percent ............... %s' % percent, num_indents=num_indents+1)
+            self.pprint('quantity .............. %s %s' % (
+                (100*quantity) if percent else quantity,
+                '%' if percent else COIN2),
+                num_indents=num_indents+1)
+            self.pprint('limit_price ........... %s %s/%s' % (limit_price, COIN1, COIN2), num_indents=num_indents+1)
+
+        if limit_price <= self.price:
+            if verbose: self.pprint('\nlimit_price is less than current price of %.6f %s/%s, entering at current price ...' % (
+                    self.price, COIN1, COIN2), num_indents=num_indents+1)
+            order_id, trade_message = self.enter_short_market_order(
+                account_type, quantity, percent=percent, verbose=verbose, num_indents=num_indents+1)
+            if verbose: self.pprint('Enter Limit Short %s.' % ('Succeeded' if trade_message == 'Trade Successful.' else 'Failed'), num_indents=num_indents)
+            return order_id, trade_message
+        else:
+            order_id = self.get_order_id()
+            self.open_orders[order_id] = [account_type, 'short', 'enter', quantity, limit_price, percent]
+            if verbose: self.pprint('Created enter short open limit order. order_id: %s' % order_id, num_indents=num_indents)
+            return order_id, 'Created enter short open limit order'
+    def exit_short(self,
+        account_type,
+        quantity,
+        percent=False,
+        limit_price=None,
+        verbose=False,
+        num_indents=0):
+
+        if limit_price == None: # market order
+            return self.exit_short_market_order(
+                account_type, quantity, percent=percent,
+                verbose=verbose, num_indents=num_indents)
+        elif isinstance(limit_price, float): # limit order
+            return self.exit_short_limit_order(
+                account_type, quantity, limit_price, percent=percent,
+                verbose=verbose, num_indents=num_indents)
+        else:
+            return None, 'Invalid input for limit_price'
     def exit_short_market_order(self,
         account_type,
         quantity,
@@ -586,12 +888,88 @@ class Strat:
                 account_type, COIN2, COIN2, quantity,
                 deduct_tf=False, verbose=verbose, num_indents=num_indents+1)
         
+        # all_open_positions_total_coin1_cost is used later but it needs to go before self.trade
+        # because self.trade changes portfolio COIN1 value
+        all_open_positions_total_coin1_cost = \
+            (self.portfolio[account_type]['collateral'] * MAX_LEVERAGE) - \
+            self.portfolio[account_type][COIN1]
+
         coin2_cost = -quantity # NOTE: when you exit a short, COIN2 in the margin account increases (adds to a previously - value)
         coin1_gain = quantity * self.price
-        return self.trade(account_type, COIN2, coin2_cost, COIN1, coin1_gain, verbose=verbose, num_indents=num_indents)
+        order_id, trade_message = self.trade(account_type, COIN2, coin2_cost, COIN1, coin1_gain, verbose=verbose, num_indents=num_indents)
+
+        # update collateral (with portfolio update) <-- this requires tracking open positions coin1 cost (which is required anyway for forced liquidation)
+        if trade_message == 'Trade Successful.' and account_type == 'margin':
+
+            self.portfolio_update[account_type]['collateral'] += (coin1_gain - op['coin1_cost'])
+
+            op_i = 0
+            _coin2_cost = abs(coin2_cost)
+            indeces_of_open_positions_to_close = []
+            index_of_open_position_to_partially_close = None
+            net_original_coin1_cost = 0
+            for op_i, op in enumerate(self.open_positions[account_type]):
+                # _coin2_cost is >, =, or < quantity of op
+                if _coin2_cost >= op['quantity']:
+                    indeces_of_open_positions_to_close.append(op_i)
+                    net_original_coin1_cost += op['coin1_cost']
+                else: # _coin2_cost < op['quantity']
+                    index_of_open_position_to_partially_close = op_i
+                    net_original_coin1_cost += 
+                _coin2_cost -= op['quantity']
+
+            # update collateral
+            _coin1_gain = coin1_gain
+            for op_i in indeces_of_open_positions_to_close:
+                op = self.open_positions[account_type][op_i]
+            self.portfolio_update[account_type]['collateral'] += (coin1_gain - op['coin1_cost'])
+
+            # update partial one
+
+            # exit ones to close
 
 
-    def trade(self, account_type, from_key, from_cost, to_key, to_gain, verbose=False, num_indents=0):
+        return None, trade_message
+    def exit_short_limit_order(self,
+        account_type,
+        quantity,
+        limit_price,
+        percent=False,
+        verbose=False,
+        num_indents=0):
+
+        self.pprint('Exiting Short Limit Order', num_indents=num_indents)
+        if verbose:
+            self.pprint('account_type .......... %s' % account_type, num_indents=num_indents+1)
+            self.pprint('percent ............... %s' % percent, num_indents=num_indents+1)
+            self.pprint('quantity .............. %s %s' % (
+                (100*quantity) if percent else quantity,
+                '%' if percent else COIN2),
+                num_indents=num_indents+1)
+            self.pprint('limit_price ........... %s %s/%s' % (limit_price, COIN1, COIN2), num_indents=num_indents+1)
+
+        if limit_price >= self.price:
+            if verbose: self.pprint('\nlimit_price is more than current price of %.6f %s/%s, exiting at current price ...' % (
+                    self.price, COIN1, COIN2), num_indents=num_indents+1)
+            order_id, trade_message = self.exit_short_market_order(
+                account_type, quantity, percent=percent, verbose=verbose, num_indents=num_indents+1)
+            if verbose: self.pprint('Exit Limit Short %s.' % ('Succeeded' if trade_message == 'Trade Successful.' else 'Failed'), num_indents=num_indents)
+            return order_id, trade_message
+        else:
+            order_id = self.get_order_id()
+            self.open_orders[order_id] = [account_type, 'short', 'exit', quantity, limit_price, percent]
+            if verbose: self.pprint('Created exit short open limit order. order_id: %s' % order_id, num_indents=num_indents)
+            return order_id, 'Created exit short open limit order'
+
+    # order helper functions
+    def trade(self,
+        account_type,
+        from_key,
+        from_cost,
+        to_key,
+        to_gain,
+        verbose=False,
+        num_indents=0):
         '''
             if enter long:  from_cost is +, to_gain is +
             if enter short: from_cost is +, to_gain is -
@@ -620,44 +998,29 @@ class Strat:
             self.portfolio_update[account_type][to_key] += to_gain # to_gain is + if long trade, and - if short trade
 
             if verbose: self.pprint('Trade Successful.', num_indents=num_indents)
-            return None, 'Trade Successful.'
+            message = 'Trade Successful.'
 
         else:
             if verbose: self.pprint('Cannot afford trade. Own %.6f %s' % (from_account_value, from_key), num_indents=num_indents)
-            return None, 'Could not afford trade.'
-    def execute_net_trades(self, verbose=False, num_indents=0):
-        if verbose: self.pprint('Executing Net Trades of t=%d' % self.t, num_indents=num_indents)
+            message = 'Could not afford trade.'
 
-        zero_trades = 0
-        for account_type in ['exchange', 'margin']:
-            for asset in [COIN1, COIN2]:
-                if self.portfolio_update[account_type][asset] != 0:
-                    if verbose: self.pprint('BEFORE: %.6f %s in %s account' % (
-                        self.portfolio[account_type][asset][-1],
-                        asset, account_type), num_indents=num_indents+1)
+        if message == 'Trade Successful' and account_type == 'margin':
+            if from_key == COIN1: # enter and new debt
+                self.portfolio_update[account_type]['debt'] += from_cost
 
-                    self.portfolio[account_type][asset].append(
-                        self.portfolio[account_type][asset][-1] + \
-                        self.portfolio_update[account_type][asset])
+            elif from_key == COIN2: # exit and update collateral
+                self.portfolio_update[account_type]['debt'][COIN?] += 
+                self.portfolio_update[account_type]['collateral'] += 
 
-                    if verbose: self.pprint('AFTER:  %.6f %s in %s account' % (
-                        self.portfolio[account_type][asset][-1],
-                        asset, account_type), num_indents=num_indents+1)
-                else:
-                    zero_trades += 1
-        if verbose: self.pprint('Successful%s.' % (
-            ', no trades to execute' if zero_trades == 4 else ''),
-            num_indents=num_indents)
-
-        self.portfolio_update_reset(
-            verbose=verbose,
-            num_indents=num_indents)
-    def check_for_forced_liquidation(self, verbose=False, num_indents=0):
-        # if losses are greater than collateral
-            # do a forced liqidation
-        pass
-
-    def convert_percent_to_quantity(self, account_type, from_key, to_key, percent, deduct_tf=True, verbose=False, num_indents=0):
+        return None, message
+    def convert_percent_to_quantity(self,
+        account_type,
+        from_key,
+        to_key,
+        percent,
+        deduct_tf=True,
+        verbose=False,
+        num_indents=0):
 
         if verbose: self.pprint('converting %.1f %% of %s supply to desired quantity of %s ...' % (100*percent, from_key, to_key), num_indents=num_indents)
         from_account_value = self.portfolio[account_type][from_key][self.t] + self.portfolio_update[account_type][from_key]
@@ -681,7 +1044,6 @@ class Strat:
                 to_key, quantity, to_key), num_indents=num_indents+1)
 
         return quantity
-
     def get_order_id(self):
         i = 0
         for order_id in self.open_orders.keys():
@@ -690,6 +1052,44 @@ class Strat:
             else:
                 i += 1
         return i
+
+    def execute_net_trades(self,
+        verbose=False,
+        num_indents=0):
+        if verbose: self.pprint('Executing Net Trades of t=%d' % self.t, num_indents=num_indents)
+
+        zero_trades = 0
+        for account_type in ['exchange', 'margin']:
+            for asset in ['collateral', COIN1, COIN2]:
+                if account_type == 'exchange' and asset == 'collateral': continue # skip this combo b/c it doesn't exist
+
+                if self.portfolio_update[account_type][asset] != 0:
+                    if verbose: self.pprint('BEFORE: %.6f %s in %s account' % (
+                        self.portfolio[account_type][asset][-1],
+                        asset, account_type), num_indents=num_indents+1)
+
+                    self.portfolio[account_type][asset].append(
+                        self.portfolio[account_type][asset][-1] + \
+                        self.portfolio_update[account_type][asset])
+
+                    if verbose: self.pprint('AFTER:  %.6f %s in %s account' % (
+                        self.portfolio[account_type][asset][-1],
+                        asset, account_type), num_indents=num_indents+1)
+                else:
+                    zero_trades += 1
+        if verbose: self.pprint('Successful%s.' % (
+            ', no trades to execute' if zero_trades == 4 else ''),
+            num_indents=num_indents)
+
+        self.portfolio_update_reset(
+            verbose=verbose,
+            num_indents=num_indents)
+    def check_for_forced_liquidation(self,
+        verbose=False, num_indents=0):
+        
+        # if losses are greater than collateral
+            # do a forced liqidation
+        pass
 
 
 
@@ -701,8 +1101,20 @@ def run_unittests(verbose=False):
     test.test_enter_long_market_order(verbose=verbose,  num_indents=1)
     test.test_enter_short_market_order(verbose=verbose, num_indents=1)
 
+    test.test_convert_enter_to_exit_opposite(verbose=verbose, num_indents=1)
+
     test.test_exit_long_market_order(verbose=verbose,   num_indents=1)
     test.test_exit_short_market_order(verbose=verbose,  num_indents=1)
+
+    test.test_enter_long_limit_order(verbose=verbose, num_indents=1)
+    test.test_enter_short_limit_order(verbose=verbose, num_indents=1)
+
+    test.test_exit_long_limit_order(verbose=verbose, num_indents=1)
+    test.test_exit_short_limit_order(verbose=verbose, num_indents=1)
+
+    test.test_convert_enter_to_exit_opposite(verbose=verbose, num_indents=1)
+
+    test.test_leverage(verbose=verbose, num_indents=1)
 
     test.pprint('Unit Tests Complete.', num_indents=0)
 class StratUnitTests:
@@ -744,7 +1156,7 @@ class StratUnitTests:
         # percent = False
 
         # test sufficient funds
-        self.pprint('test sufficient funds,     percent=False', num_indents=num_indents+1)
+        if verbose: self.pprint('test sufficient funds,     percent=False', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -760,10 +1172,10 @@ class StratUnitTests:
         assert(order_id == None and status == 'Trade Successful.')
         strat.update(verbose=verbose, num_indents=num_indents+2)
         assert(strat.portfolio['exchange'][COIN2][-1] == 1.5)
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
         # test insufficient funds
-        self.pprint('test insufficient funds,   percent=False', num_indents=num_indents+1)
+        if verbose: self.pprint('test insufficient funds,   percent=False', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -777,13 +1189,13 @@ class StratUnitTests:
             verbose=verbose,
             num_indents=num_indents+2)
         assert(order_id == None and status == 'Could not afford trade.')
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
 
 
         # percent = True
 
-        self.pprint('test sufficient funds,     percent=True', num_indents=num_indents+1)
+        if verbose: self.pprint('test sufficient funds,     percent=True', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -799,10 +1211,10 @@ class StratUnitTests:
         assert(order_id == None and status == 'Trade Successful.')
         strat.update(verbose=verbose, num_indents=num_indents+2)
         assert(strat.portfolio['exchange'][COIN1][-1] == 25000)
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
         # test insufficient funds
-        self.pprint('test insufficient funds,   percent=True', num_indents=num_indents+1)
+        if verbose: self.pprint('test insufficient funds,   percent=True', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -816,7 +1228,7 @@ class StratUnitTests:
             verbose=verbose,
             num_indents=num_indents+2)
         assert(order_id == None and status == 'Could not afford trade.')
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
 
         self.pprint('Test Successful.', num_indents=num_indents)
@@ -830,7 +1242,7 @@ class StratUnitTests:
         # percent = False
 
         # test sufficient funds
-        self.pprint('test sufficient funds,     percent=False', num_indents=num_indents+1)
+        if verbose: self.pprint('test sufficient funds,     percent=False', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -846,10 +1258,10 @@ class StratUnitTests:
         assert(order_id == None and status == 'Trade Successful.')
         strat.update(verbose=verbose, num_indents=num_indents+2)
         assert(strat.portfolio['margin'][COIN2][-1] == -1.5)
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
         # test insufficient funds
-        self.pprint('test insufficient funds,   percent=False', num_indents=num_indents+1)
+        if verbose: self.pprint('test insufficient funds,   percent=False', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -863,13 +1275,13 @@ class StratUnitTests:
             verbose=verbose,
             num_indents=num_indents+2)
         assert(order_id == None and status == 'Could not afford trade.')
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
 
 
         # percent = True
 
-        self.pprint('test sufficient funds,     percent=True', num_indents=num_indents+1)
+        if verbose: self.pprint('test sufficient funds,     percent=True', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -884,11 +1296,11 @@ class StratUnitTests:
             num_indents=num_indents+2)
         assert(order_id == None and status == 'Trade Successful.')
         strat.update(verbose=verbose, num_indents=num_indents+2)
-        assert(strat.portfolio['margin'][COIN1][-1] == 25000)
-        self.pprint('test successful.', num_indents=num_indents+1)
+        assert(strat.portfolio['margin'][COIN1][-1] == 50000)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
         # test insufficient funds
-        self.pprint('test insufficient funds,   percent=True', num_indents=num_indents+1)
+        if verbose: self.pprint('test insufficient funds,   percent=True', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -902,7 +1314,7 @@ class StratUnitTests:
             verbose=verbose,
             num_indents=num_indents+2)
         assert(order_id == None and status == 'Could not afford trade.')
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
 
         self.pprint('Test Successful.', num_indents=num_indents)
@@ -917,7 +1329,7 @@ class StratUnitTests:
         # percent = False
 
         # test sufficient funds
-        self.pprint('test sufficient funds,     percent=False', num_indents=num_indents+1)
+        if verbose: self.pprint('test sufficient funds,     percent=False', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -940,10 +1352,10 @@ class StratUnitTests:
         assert(order_id == None and status == 'Trade Successful.')
         strat.update(verbose=verbose, num_indents=num_indents+2)
         assert(strat.portfolio['exchange'][COIN2][-1] == 1.0)
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
         # test insufficient funds
-        self.pprint('test insufficient funds,   percent=False', num_indents=num_indents+1)
+        if verbose: self.pprint('test insufficient funds,   percent=False', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -964,13 +1376,13 @@ class StratUnitTests:
             verbose=verbose,
             num_indents=num_indents+2)
         assert(order_id == None and status == 'Could not afford trade.')
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
 
 
         # percent = True
 
-        self.pprint('test sufficient funds,     percent=True', num_indents=num_indents+1)
+        if verbose: self.pprint('test sufficient funds,     percent=True', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -993,10 +1405,10 @@ class StratUnitTests:
         assert(order_id == None and status == 'Trade Successful.')
         strat.update(verbose=verbose, num_indents=num_indents+2)
         assert(strat.portfolio['exchange'][COIN2][-1] == 0.0)
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
         # test insufficient funds
-        self.pprint('test insufficient funds,   percent=True', num_indents=num_indents+1)
+        if verbose: self.pprint('test insufficient funds,   percent=True', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -1017,7 +1429,7 @@ class StratUnitTests:
             verbose=verbose,
             num_indents=num_indents+2)
         assert(order_id == None and status == 'Could not afford trade.')
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
         self.pprint('Test Successful.', num_indents=num_indents)
     def test_exit_short_market_order(self,
@@ -1030,7 +1442,7 @@ class StratUnitTests:
         # percent = False
 
         # test sufficient funds
-        self.pprint('test sufficient funds,     percent=False', num_indents=num_indents+1)
+        if verbose: self.pprint('test sufficient funds,     percent=False', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -1053,10 +1465,10 @@ class StratUnitTests:
         assert(order_id == None and status == 'Trade Successful.')
         strat.update(verbose=verbose, num_indents=num_indents+2)
         assert(strat.portfolio['margin'][COIN2][-1] == -1.0)
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
         # test insufficient funds
-        self.pprint('test insufficient funds,   percent=False', num_indents=num_indents+1)
+        if verbose: self.pprint('test insufficient funds,   percent=False', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -1077,13 +1489,13 @@ class StratUnitTests:
             verbose=verbose,
             num_indents=num_indents+2)
         assert(order_id == None and status == 'Could not afford trade.')
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
 
 
         # # percent = True
 
-        self.pprint('test sufficient funds,     percent=True', num_indents=num_indents+1)
+        if verbose: self.pprint('test sufficient funds,     percent=True', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -1106,10 +1518,10 @@ class StratUnitTests:
         assert(order_id == None and status == 'Trade Successful.')
         strat.update(verbose=verbose, num_indents=num_indents+2)
         assert(strat.portfolio['margin'][COIN2][-1] == 0.0)
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
         # test insufficient funds
-        self.pprint('test insufficient funds,   percent=True', num_indents=num_indents+1)
+        if verbose: self.pprint('test insufficient funds,   percent=True', num_indents=num_indents+1)
         strat = Strat(
             backtesting=True,
             verbose=verbose,
@@ -1130,21 +1542,354 @@ class StratUnitTests:
             verbose=verbose,
             num_indents=num_indents+2)
         assert(order_id == None and status == 'Could not afford trade.')
-        self.pprint('test successful.', num_indents=num_indents+1)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
 
         self.pprint('Test Successful.', num_indents=num_indents)
 
-    def test_leverage(
+    def test_enter_long_limit_order(self,
+        verbose=False,
+        num_indents=0):
+
+        self.pprint('Test Enter Long Limit Order', num_indents=num_indents)
+
+        if verbose: self.pprint('test limit_price is more than current price', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        current_price = strat.price
+        order_id, trade_message = strat.enter_long_limit_order(
+            'exchange',
+            1.0,
+            current_price * 1.10,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        assert(order_id == None and trade_message == 'Trade Successful.')
+        if verbose: self.pprint('Test Successful.', num_indents=num_indents+1)
+
+        if verbose: self.pprint('test limit_price is less than current price (an open order is created)', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        current_price = strat.price
+        order_id, trade_message = strat.enter_long_limit_order(
+            'exchange',
+            1.0,
+            current_price * 0.60,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        assert(order_id != None and len(strat.open_orders) == 1 and trade_message == 'Created enter long open limit order')
+        if verbose: self.pprint('Test Successful.', num_indents=num_indents+1)
+
+        self.pprint('Test Successful.', num_indents=num_indents)
+    def test_enter_short_limit_order(self,
+        verbose=False,
+        num_indents=0):
+
+        self.pprint('Test Enter Short Limit Order', num_indents=num_indents)
+
+        if verbose: self.pprint('test limit_price is less than current price', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        current_price = strat.price
+        order_id, trade_message = strat.enter_short_limit_order(
+            'margin',
+            1.0,
+            current_price * 0.90,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        assert(order_id == None and trade_message == 'Trade Successful.')
+        if verbose: self.pprint('Test Successful.', num_indents=num_indents+1)
+
+        if verbose: self.pprint('test limit_price is more than current price (an open order is created)', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        current_price = strat.price
+        order_id, trade_message = strat.enter_short_limit_order(
+            'margin',
+            1.0,
+            current_price * 1.60,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        assert(order_id != None and len(strat.open_orders) == 1 and trade_message == 'Created enter short open limit order')
+        if verbose: self.pprint('Test Successful.', num_indents=num_indents+1)
+
+        self.pprint('Test Successful.', num_indents=num_indents)
+
+    def test_exit_long_limit_order(self,
+        verbose=False,
+        num_indents=0):
+
+        self.pprint('Test Exit Long Limit Order', num_indents=num_indents)
+
+        if verbose: self.pprint('test limit_price is less than current price', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        order_id, status = strat.enter_long_market_order(
+            'exchange',
+            1.0,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        current_price = strat.price
+        order_id, trade_message = strat.exit_long_limit_order(
+            'exchange',
+            1.0,
+            current_price * 0.60,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        assert(order_id == None and trade_message == 'Trade Successful.')
+        assert(strat.portfolio['exchange'][COIN2][-1] == 0)
+        if verbose: self.pprint('Test Successful.', num_indents=num_indents+1)
+
+        if verbose: self.pprint('test limit_price is more than current price (an open order is created)', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        order_id, status = strat.enter_long_market_order(
+            'exchange',
+            1.0,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        current_price = strat.price
+        order_id, trade_message = strat.exit_long_limit_order(
+            'exchange',
+            1.0,
+            current_price * 1.60,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        assert(order_id != None and len(strat.open_orders) == 1 and trade_message == 'Created exit long open limit order')
+        if verbose: self.pprint('Test Successful.', num_indents=num_indents+1)
+
+        self.pprint('Test Successful.', num_indents=num_indents)
+    def test_exit_short_limit_order(self,
+        verbose=False,
+        num_indents=0):
+
+        self.pprint('Test Exit Short Limit Order', num_indents=num_indents)
+
+        if verbose: self.pprint('test limit_price is more than current price', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        order_id, status = strat.enter_short_market_order(
+            'margin',
+            1.0,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        current_price = strat.price
+        order_id, trade_message = strat.exit_short_limit_order(
+            'margin',
+            1.0,
+            current_price * 1.40,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        assert(order_id == None and trade_message == 'Trade Successful.')
+        assert(strat.portfolio['exchange'][COIN2][-1] == 0)
+        if verbose: self.pprint('Test Successful.', num_indents=num_indents+1)
+
+        if verbose: self.pprint('test limit_price is less than current price (an open order is created)', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        order_id, status = strat.enter_short_market_order(
+            'margin',
+            1.0,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        current_price = strat.price
+        order_id, trade_message = strat.exit_short_limit_order(
+            'margin',
+            1.0,
+            current_price * 0.90,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        assert(order_id != None and len(strat.open_orders) == 1 and trade_message == 'Created exit short open limit order')
+        if verbose: self.pprint('Test Successful.', num_indents=num_indents+1)
+
+        self.pprint('Test Successful.', num_indents=num_indents)
+
+    def test_convert_enter_to_exit_opposite(self,
+        verbose=False,
+        num_indents=0):
+
+        self.pprint('Test Convert Enter to Exit', num_indents=num_indents)
+        
+        if verbose: self.pprint('test convert enter long to exit short opposite (new more than old)', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        order_id, status = strat.enter_short_market_order(
+            'margin',
+            1.0,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        order_id, status = strat.enter_long_market_order(
+            'margin',
+            1.5,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        assert(strat.portfolio['margin'][COIN2][-1] == 0.5)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
+
+        if verbose: self.pprint('test convert enter long to exit short opposite (new less than old)', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        order_id, status = strat.enter_short_market_order(
+            'margin',
+            1.0,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        order_id, status = strat.enter_long_market_order(
+            'margin',
+            0.5,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        assert(strat.portfolio['margin'][COIN2][-1] == -0.5)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
+
+
+        if verbose: self.pprint('test convert enter short to exit long opposite (new more than old)', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        order_id, status = strat.enter_long_market_order(
+            'margin',
+            1.0,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        order_id, status = strat.enter_short_market_order(
+            'margin',
+            1.5,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        assert(strat.portfolio['margin'][COIN2][-1] == -0.5)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
+
+        if verbose: self.pprint('test convert enter short to exit long opposite (new less than old)', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        order_id, status = strat.enter_long_market_order(
+            'margin',
+            1.0,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        order_id, status = strat.enter_short_market_order(
+            'margin',
+            0.5,
+            percent=False,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        assert(strat.portfolio['margin'][COIN2][-1] == 0.5)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
+
+        self.pprint('Test Successful.', num_indents=num_indents)
+
+    def test_leverage(self,
         verbose=False,
         num_indents=0):
 
         self.pprint('Test Leverage', num_indents=num_indents)
 
-        # tbd
+        if verbose: self.pprint('test enter more than collateral but less than MAX_LEVERAGE', num_indents=num_indents+1)
+        strat = Strat(
+            backtesting=True,
+            verbose=verbose,
+            num_indents=num_indents+2,
+            logfile_path=self.logfile_path,
+            clear_log=False)
+        order_id, status = strat.enter_long_market_order(
+            'margin',
+            1.50,
+            percent=True,
+            verbose=verbose,
+            num_indents=num_indents+2)
+        assert(order_id == None and status == 'Trade Successful.')
+        strat.update(verbose=verbose, num_indents=num_indents+2)
+        assert(strat.portfolio['margin'][COIN1][-1] == 75000)
+        if verbose: self.pprint('test successful.', num_indents=num_indents+1)
+
+
+
+        # test enter more than MAX_LEVERAGE
 
         self.pprint('Test Successful.', num_indents=num_indents)
 
-    def test_forced_liquidation(
+    def test_forced_liquidation(self,
         verbose=False,
         num_indents=0):
 
@@ -1154,6 +1899,18 @@ class StratUnitTests:
 
         self.pprint('Test Successful.', num_indents=num_indents)
 
+    def test_trading_fee(self,
+        verbose=False,
+        num_indents=0):
+
+        self.pprint('Test Trading Fee', num_indents=num_indents)
+        
+        # tbd
+
+        # sell all of exchange portfolio into COIN2
+        # there should be x COIN2s worth of the original value * (1 - trading_fee) in COIN2
+
+        self.pprint('Test Successful.', num_indents=num_indents)
 
 
 if __name__ == '__main__':
