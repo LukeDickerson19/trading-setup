@@ -287,12 +287,19 @@ class Strat:
         self.t = t
         self.start_t = t
         self.unix_date, self.date, self.price, self.pct_chg = df.iloc[t][:4]
+
+        ########################################################## STRATEGY INIT GOES HERE #####################################################
+
+        
+
+        ########################################################################################################################################
+
         if verbose:
             self.pprint('Starting Backtest at:', num_indents=num_indents+1)
-            self.pprint('t ....................................... %d' % self.t,                                num_indents=num_indents+2)
-            self.pprint('unix_date ............................... %s' % self.unix_date,                        num_indents=num_indents+2)
-            self.pprint('date .................................... %s' % self.date,                             num_indents=num_indents+2)
-            self.pprint('price ................................... %s %s per %s' % (self.price, COIN1, COIN2),  num_indents=num_indents+2)
+            self.pprint('t ....................................... %d' % self.t,                               num_indents=num_indents+2)
+            self.pprint('unix_date ............................... %s' % self.unix_date,                       num_indents=num_indents+2)
+            self.pprint('date .................................... %s' % self.date,                            num_indents=num_indents+2)
+            self.pprint('price ................................... %s %s per %s' % (self.price, COIN1, COIN2), num_indents=num_indents+2)
             label = '%s) %s %.4f %%' % (
                 period_labels[period],
                 (16 - len(period_labels[period])) * '.',
@@ -319,13 +326,6 @@ class Strat:
         ########################################################## STRATEGY UPDATE GOES HERE ###################################################
 
         # tbd
-        if t == 9:
-
-            pos_id = self.enter('short', 10)
-
-        elif t == 22:
-
-            pos_id = self.exit(list(self.open_positions.keys())[0])
 
         ########################################################################################################################################
 
@@ -336,44 +336,6 @@ class Strat:
 
         self.pprint('Update Complete.', num_indents=num_indents)
         # input()
-
-    # place order
-    def enter(self,
-        long_or_short,
-        quantity,
-        verbose=False,
-        num_indents=0):
-
-        position_id = self.get_position_id()
-        self.open_positions[position_id] = {
-            'long_or_short' : long_or_short,
-            'enter_price'   : self.price,
-            'enter_value'   : quantity
-        }
-        return position_id
-    def exit(self,
-        position_id,
-        verbose=False,
-        num_indents=0):
-
-        enter_price = self.open_positions[position_id]['enter_price']
-        exit_price  = self.price
-        tf = TF if INCLUDE_TF else 0
-        pl =  ((exit_price - enter_price) / enter_price) * (1 - tf)
-        pl *= 1 if self.open_positions[position_id]['long_or_short'] == 'long' else -1
-        pl *= self.open_positions[position_id]['enter_value']
-        self.pl_update += pl
-
-        del self.open_positions[position_id]
-    def get_position_id(self):
-        i = 0
-        for pos_id in self.open_positions.keys():
-            if pos_id > i:
-                return i
-            else:
-                i += 1
-        return i
-
     def plot(self,
         verbose=False,
         num_indents=0):
@@ -447,11 +409,61 @@ class Strat:
 
         plt.show()
 
+    # place order
+    def enter(self,
+        long_or_short,
+        quantity,
+        verbose=False,
+        num_indents=0):
+
+        position_id = self.get_position_id()
+        self.open_positions[position_id] = {
+            'long_or_short' : long_or_short,
+            'enter_price'   : self.price,
+            'enter_value'   : quantity
+        }
+        if verbose: self.pprint('Entered a %s position of %.2f %ss at a price of %.6f %s/%s. position_id = \'%s\'' % (
+            long_or_short, quantity, COIN2, self.price, COIN1, COIN2, position_id),
+            num_indents=num_indents)
+        return position_id
+    def exit(self,
+        position_id,
+        verbose=False,
+        num_indents=0):
+
+        enter_price = self.open_positions[position_id]['enter_price']
+        exit_price  = self.price
+        tf = TF if INCLUDE_TF else 0
+        pl_pct =  ((exit_price - enter_price) / enter_price) * (1 - tf)
+        pl_pct *= 1 if self.open_positions[position_id]['long_or_short'] == 'long' else -1
+        pl_value = pl_pct * self.open_positions[position_id]['enter_value']
+        self.pl_update += pl_value
+
+        position = self.open_positions[position_id]
+        long_or_short = position['long_or_short']
+        quantity = position['enter_value']
+        del self.open_positions[position_id]
+
+        if verbose: self.pprint('Exited a %s position (with position_id: \'%s\') of %.2f %ss at a price of %.6f %s/%s for a profit of %.6f %s (%.2f %%)' % (
+            long_or_short, position_id,
+            quantity, COIN2,
+            self.price, COIN1, COIN2,
+            pl_value, COIN2, (100 * pl_pct)),
+            num_indents=num_indents)
+    def get_position_id(self):
+        i = 0
+        for pos_id in sorted(self.open_positions.keys()):
+            pos_id = int(pos_id.split('_')[-1])
+            if pos_id > i:
+                return 'id_%d' % i
+            else:
+                i += 1
+        return 'id_%d' % i
+
+
 
 if __name__ == '__main__':
 
     strat = Strat(verbose=True)
     print(strat.logfile_path)
-    strat.backtest(num_periods=100, verbose=True)
-
-    strat.plot()
+    strat.backtest(num_periods=100, verbose=True, plot=True)
