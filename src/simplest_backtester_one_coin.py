@@ -163,7 +163,7 @@ def setup_backtest(
 
 if __name__ == '__main__':
 
-    start_time_dt = datetime(2019, 11, 21, 0, 0, 0)
+    start_time_dt = datetime(2019, 11, 21, 0, 0, 0) # year, month, day, hour, minute, second
     end_time_dt = datetime(  2020,  2, 21, 0, 0, 0)
     period = 5 * 60 # 5 minute intervals
     df = setup_backtest(
