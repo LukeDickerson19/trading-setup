@@ -46,7 +46,7 @@ EXCHANGES AND DATA SOURCES:
 			alpaca-trade-api-python
 			https://github.com/alpacahq/alpaca-trade-api-python
 
-	StockPup:	
+	StockPup:
 
 		DESCRIPTION:
 
@@ -3087,11 +3087,9 @@ TODO:
 			use the stockpup code to create a scrapper too other sites also
 				which ones to use:
 
-
 			write the definitions of each CSV column in the DESCRIPTION of this file.
 				they're all on stockpup 
 				http://www.stockpup.com/data/
-
 
 		EVENTUALLY:
 

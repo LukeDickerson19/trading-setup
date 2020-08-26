@@ -1,7 +1,7 @@
 # trading-setup
 
 
-# Exchanges
+### Exchanges
 
 poloniex - crypto price data
 	doesn't service US citizens anymore though :(

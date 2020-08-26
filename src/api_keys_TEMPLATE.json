@@ -43,6 +43,16 @@
 					"SECRET_KEY"     : ""
 				}
 			}
+		},
+		"binanceUS" : {
+			"account1" : {
+				"email"      : "",
+				"password"   : "",
+				"2FA"        : "",
+				"api_key"    : "",
+				"secret_key" : "",
+				"key_name"   : ""
+			}
 		}
 	},
 	"data_sources" : {

@@ -293,7 +293,7 @@ class Strat:
         verbose=False, num_indents=0):
         
         if verbose: self.pprint('Setting portfolio_update to zero.', num_indents=num_indents)
-        self.portfolio_update =  {
+        self.portfolio_update = {
             'exchange' : {
                 COIN1 : 0.0,
                 COIN2 : 0.0
@@ -331,9 +331,7 @@ class Strat:
     # connect to Poloniex Exchange server
     def poloniex_server(self):
 
-        # select which account to use, options:
-        # 'account1' aka lucius.dickerson@gmail.com
-        # 'account2' aka private.mail285@gmail.com
+        # select which account to use:
         account = 'account1'
 
         data       = json.load(open('./api_keys.json', 'r'))
@@ -408,7 +406,8 @@ class Strat:
             input()
         print('Backtest Complete')
     def update(self,
-        verbose=False, num_indents=0):
+        verbose=False,
+        num_indents=0):
 
         self.unix_date, self.date, self.price, self.pct_chg = self.df.iloc[self.t]
         t, unix_date, date, price, pct_chg = self.t, self.unix_date, self.date, self.price, self.pct_chg
@@ -1915,8 +1914,8 @@ class StratUnitTests:
 
 if __name__ == '__main__':
 
-    run_unittests(verbose=True)
+    # run_unittests(verbose=True)
 
-    # strat = Strat()
-    # strat.backtest()
+    strat = Strat()
+    strat.backtest()
 
