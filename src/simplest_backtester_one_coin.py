@@ -165,15 +165,14 @@ if __name__ == '__main__':
 
     start_time_dt = datetime(2019, 11, 21, 0, 0, 0) # year, month, day, hour, minute, second
     end_time_dt = datetime(  2020,  2, 21, 0, 0, 0)
-    period = 5 * 60 # 5 minute intervals
+    period = 5 * 60 # 5 minute intervals, 300 seconds
     df = setup_backtest(
         start_time_dt,
         end_time_dt,
         period,
         verbose=True)
 
-    print(df)
-
+    print('Iterating over price data ...')
     for t, row in df.iterrows():
         print('t = %d of %d\tunix_date = %s\tdatetime = %s\t%s price = %s\tpercent_change = %.2f %%' % (
             t, df.shape[0], row['unix_date'], row['datetime'], COIN2, row[COIN2], 100 * row['pct_chg']))
