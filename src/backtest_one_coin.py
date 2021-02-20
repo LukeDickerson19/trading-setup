@@ -2,7 +2,8 @@ import sys
 import os
 import pathlib
 SCRIPT_PATH   = pathlib.Path(__file__).resolve()
-ROOT_PATH     = SCRIPT_PATH.parent.parent
+SRC_PATH      = SCRIPT_PATH.parent
+ROOT_PATH     = SRC_PATH.parent
 DATA_PATH     = os.path.join(ROOT_PATH.absolute(), 'data', 'crypto', 'poloniex')
 POLONIEX_PATH = os.path.join(ROOT_PATH.absolute(), 'src', 'exchanges', 'crypto')
 # print(SCRIPT_PATH.absolute())
@@ -83,8 +84,9 @@ MAX_LEVERAGE = 2.0
 # DATA_FILENAME = 'price_data_one_coin-%s_%s-2hr_intervals-ONE_YEAR-03_01_2018_8am_to_05_30_2019_6am.csv' % (COIN2, COIN1)
 # DATA_FILENAME = 'price_data_one_coin-%s_%s-5min_intervals-ONE_DAY-02-20-2020-12am_to_02-21-2020-12am.csv' % (COIN2, COIN1)
 # DATA_FILENAME = 'price_data_one_coin-%s_%s-5min_intervals-ONE_MONTH-01-21-2020-12am_to_02-21-2020-12am.csv' % (COIN2, COIN1)
-DATA_FILENAME = 'price_data_one_coin-%s_%s-5min_intervals-ONE_QUARTER-11-21-2019-12am_to_02-21-2020-12am.csv' % (COIN2, COIN1)
+DATA_FILENAME = "price_data_one_coin-%s_%s-5min_intervals-ONE_QUARTER-11-21-2019-12am_to_02-21-2020-12am.csv" % (COIN2, COIN1)
 BACKTEST_DATA_FILE = os.path.join(DATA_PATH, DATA_FILENAME)
+API_KEYS_FILEPATH = os.path.join(SRC_PATH, "api_keys.json")
 
 
 cur_pl = [0] # cur_pl = current p/l from this time step
@@ -102,7 +104,7 @@ BLOCK_NET_PL = True # set BLOCK_NET_PL to True if you want to only update net_pl
 #   draw_line = draw a line on the blank line before or after the string
 # pprint constants
 OUTPUT_TO_CONSOLE = True
-OUTPUT_TO_LOGFILE = True
+OUTPUT_TO_LOGFILE = False
 STRATEGY_LOGFILE_PATH  = os.path.join(ROOT_PATH.absolute(), 'logs', 'backtest_log.txt')
 UNITTEST_LOGFILE_PATH  = os.path.join(ROOT_PATH.absolute(), 'logs', 'unittest_log.txt')
 LOGFILE_PATH = None # to be set by Strat class or StratUnitTests class
@@ -140,7 +142,7 @@ class Strat:
             },
             'margin' : {
                 'collateral' : margin_start_quantity,         # initial quantity of money (in COIN1) in the Margin account (aka collateral)
-                'debt': {COIN1 : 0.0, COIN2 : 0.0}            # initial quantity of money in the Margin account that has been borrowed
+                'debt': {COIN1 : 0.0, COIN2 : 0.0},           # initial quantity of money in the Margin account that has been borrowed
                 COIN1 : margin_start_quantity * MAX_LEVERAGE, # initial quantity of money (in COIN1) in Margin account that can be borrowed
                 COIN2 : 0.0                                   # initial quantity of money (in COIN2) in the Margin account (+ is long, - is short)
             }
@@ -168,7 +170,7 @@ class Strat:
         # }
         # # dict:
         # # value: (dict with keys): long_or_short(str), quantity(float), enter_price(float)
-        self.margin_coin1_debt
+        # self.margin_coin1_debt
 
         self.reset(
             exchange_start_quantity,
@@ -334,7 +336,7 @@ class Strat:
         # select which account to use:
         account = 'account1'
 
-        data       = json.load(open('./api_keys.json', 'r'))
+        data       = json.load(open(API_KEYS_FILEPATH, 'r'))
         api_key    = data['exchanges']['poloniex'][account]['api_key']
         secret_key = data['exchanges']['poloniex'][account]['secret_key']
 
@@ -354,29 +356,83 @@ class Strat:
         start_time_unix = time.mktime(start_time_dt.timetuple())
         end_time_unix   = time.mktime(end_time_dt.timetuple())
 
+        print('Start Date: %s\t\tStart Unix: %s'   % (datetime.fromtimestamp(start_time_unix), start_time_unix))
+        print('End Date:   %s\t\tEnd Unix:   %s\n' % (datetime.fromtimestamp(end_time_unix), end_time_unix))
+
         conn = self.poloniex_server()
 
-        # get history data of this currency into the dictionary
-        prices = conn.api_query("returnChartData", {
-                'currencyPair': PAIR,
-                'start': start_time_unix,
-                'end': end_time_unix,
-                'period': period
-            })
+        def get_chunk(
+            chunk_index,
+            num_chunks,
+            chunk_start_time_unix,
+            chunk_end_time_unix,
+            periods_per_chunk):
 
-        prices2 = []
-        for t in range(num_periods):  # remove unneeded data
-            price = prices[t]['close']
-            prices2.append({'unix_date': prices[t]['date'], COIN2: price})
+            if verbose:
+                print('chunk %d of %d:\t%s to %s' % (
+                    chunk_index, num_chunks,
+                    datetime.fromtimestamp(chunk_start_time_unix),
+                    datetime.fromtimestamp(chunk_end_time_unix)),
+                    end='\t')
 
-        # create 'unix_date' and 'datetime' columns
-        df = pd.DataFrame(prices2)
-        df['datetime'] = df['unix_date'].apply(
-            lambda unix_timestamp : \
-            datetime.fromtimestamp(unix_timestamp))
+            # get history data of this currency into the dictionary
+            prices1 = conn.api_query("returnChartData", {
+                    'currencyPair': PAIR,
+                    'start': chunk_start_time_unix,
+                    'end': chunk_end_time_unix,
+                    'period': period
+                })
+            # print(type(prices1), prices1[0])
+            # input()
 
-        # reorder columns
-        df = df[['unix_date', 'datetime', COIN2]]
+            # remove unneeded data
+            prices2 = [{
+                'unix_date': price_data['date'],
+                COIN2: price_data['close'] \
+            } for price_data in prices1]
+            # print(type(prices2), prices2[0])
+            # input()
+
+            # create 'unix_date' and 'datetime' columns
+            df = pd.DataFrame(prices2)
+            df['datetime'] = df['unix_date'].apply(
+                lambda unix_timestamp : \
+                datetime.fromtimestamp(unix_timestamp))
+
+            # reorder columns and reset indeces
+            df = df[['unix_date', 'datetime', COIN2]]
+
+            return df
+
+        periods_per_chunk = int((24 * 60 * 60) / (5 * 60)) # 10000
+        chunk_duration = period * periods_per_chunk
+        current_time_unix = start_time_unix
+        df0 = pd.DataFrame({"unix_date":[], "datetime":[], COIN2:[]})
+        chunk_index = 1
+        num_chunks = (end_time_unix - start_time_unix) / int(start_time_unix/chunk_duration)
+        while current_time_unix < end_time_unix:
+            chunk_end_time_unix = current_time_unix + chunk_duration
+            df0 = df0.append(
+                get_chunk(
+                    chunk_index,
+                    num_chunks,
+                    current_time_unix,
+                    chunk_end_time_unix,
+                    periods_per_chunk),
+                ignore_index=True)
+            if verbose: print("total rows (aka periods) collected: %s" % df0.shape[0])
+            # print(df.head(10))
+            current_time_unix = chunk_end_time_unix
+            chunk_index += 1
+            time.sleep(1)
+        df0.drop_duplicates(
+            subset="unix_date",
+            keep="last",
+            inplace=True,
+            ignore_index=True)
+        df0.reset_index(
+            inplace=True,
+            drop=True)
 
         if save_to_csv:
     
@@ -388,13 +444,118 @@ class Strat:
             new_backtest_data_file = os.path.join(DATA_PATH, new_data_filename)
             df.to_csv(new_backtest_data_file)
 
-        if verbose: self.pprint('Successfully aquired price data from poloniex API.', num_indents=num_indents, new_line_start=True)
-        return df
+        if verbose: self.pprint('Successfully aquired price data from poloniex API.',
+                        num_indents=num_indents,
+                        new_line_start=True)
+        return df0
+    def march_into_the_past(self,
+        start_time_dt,
+        period,
+        num_periods,
+        save_to_csv=False,
+        verbose=False,
+        num_indents=0):
+
+        # get history data from startTime to endTime
+        start_time_unix = time.mktime(start_time_dt.timetuple())
+        print('Start Date: %s\t\tStart Unix: %s'   % (datetime.fromtimestamp(start_time_unix), start_time_unix))
+
+        conn = self.poloniex_server()
+
+        def get_chunk(
+            chunk_index,
+            chunk_start_time_unix,
+            chunk_end_time_unix,
+            periods_per_chunk):
+
+            if verbose:
+                print('chunk %d of %d:\t%s to %s' % (
+                    chunk_index, num_chunks,
+                    datetime.fromtimestamp(chunk_start_time_unix),
+                    datetime.fromtimestamp(chunk_end_time_unix)),
+                    end='\t')
+
+            # get history data of this currency into the dictionary
+            prices1 = conn.api_query("returnChartData", {
+                    'currencyPair': PAIR,
+                    'start': chunk_start_time_unix,
+                    'end': chunk_end_time_unix,
+                    'period': period
+                })
+            # print(type(prices1), prices1[0])
+            # input()
+
+            # remove unneeded data
+            prices2 = [{
+                'unix_date': price_data['date'],
+                COIN2: price_data['close'] \
+            } for price_data in prices1]
+            # print(type(prices2), prices2[0])
+            # input()
+
+            # create 'unix_date' and 'datetime' columns
+            df = pd.DataFrame(prices2)
+            df['datetime'] = df['unix_date'].apply(
+                lambda unix_timestamp : \
+                datetime.fromtimestamp(unix_timestamp))
+
+            # reorder columns and reset indeces
+            df = df[['unix_date', 'datetime', COIN2]]
+
+            return df
+
+        periods_per_chunk = int((24 * 60 * 60) / (5 * 60)) # 10000
+        chunk_duration = period * periods_per_chunk
+        current_time_unix = start_time_unix
+        df0 = pd.DataFrame({"unix_date":[], "datetime":[], COIN2:[]})
+        chunk_index = 1
+        num_chunks = (end_time_unix - start_time_unix) / int(start_time_unix/chunk_duration)
+        while True:
+            chunk_start_time_unix = current_time_unix - chunk_duration
+            chunk_end_time_unix = current_time_unix
+            chunk = get_chunk(
+                chunk_index,
+                num_chunks,
+                chunk_start_time_unix,
+                chunk_end_time_unix,
+                periods_per_chunk)
+            df0 = df0.append(chunk, ignore_index=True)
+            if verbose: print("total rows (aka periods) collected: %s" % df0.shape[0])
+            # print(df.head(10))
+            current_time_unix = chunk_start_time_unix
+            chunk_index += 1
+            time.sleep(1)
+        df0.drop_duplicates(
+            subset="unix_date",
+            keep="last",
+            inplace=True,
+            ignore_index=True)
+        df0.reset_index(
+            inplace=True,
+            drop=True)
+
+        if save_to_csv:
+    
+            # USE THIS AS A TEMPLATE TO CREATE new_data_filename (replace "APPROX_DURATION" with the approximate duration of the backtest)
+            new_data_filename = 'price_data_one_coin-%s_%s-5min_intervals-APPROX_DURATION-%S_to_%s.csv' % (
+                COIN2, COIN1,
+                start_time_dt.strftime('%Y-%m-%d-%I%p'),
+                end_time_dt.strftime('%Y-%m-%d-%I%p'))
+            new_backtest_data_file = os.path.join(DATA_PATH, new_data_filename)
+            df.to_csv(new_backtest_data_file)
+
+        if verbose: self.pprint('Successfully aquired price data from poloniex API.',
+                        num_indents=num_indents,
+                        new_line_start=True)
+        return df0
     def get_past_prices_from_csv_file(self,
         verbose=False,
         num_indents=0):
-        if verbose: self.pprint('Successfully aquired price data from CSV file.', num_indents=num_indents, new_line_start=True)
+        if verbose: self.pprint('Successfully aquired price data from CSV file.',
+                        num_indents=num_indents,
+                        new_line_start=True)
         return pd.read_csv(BACKTEST_DATA_FILE, index_col=[0])
+
 
     # run backtest
     def backtest(self):
@@ -914,8 +1075,7 @@ class Strat:
                     net_original_coin1_cost += op['coin1_cost']
                 else: # _coin2_cost < op['quantity']
                     index_of_open_position_to_partially_close = op_i
-                    net_original_coin1_cost += 
-                _coin2_cost -= op['quantity']
+                    net_original_coin1_cost += (_coin2_cost - op['quantity'])
 
             # update collateral
             _coin1_gain = coin1_gain
@@ -924,6 +1084,7 @@ class Strat:
             self.portfolio_update[account_type]['collateral'] += (coin1_gain - op['coin1_cost'])
 
             # update partial one
+
 
             # exit ones to close
 
@@ -1008,8 +1169,9 @@ class Strat:
                 self.portfolio_update[account_type]['debt'] += from_cost
 
             elif from_key == COIN2: # exit and update collateral
-                self.portfolio_update[account_type]['debt'][COIN?] += 
-                self.portfolio_update[account_type]['collateral'] += 
+                pass # TODO
+                # self.portfolio_update[account_type]['debt'][COIN?] += ?
+                # self.portfolio_update[account_type]['collateral'] += ?
 
         return None, message
     def convert_percent_to_quantity(self,
