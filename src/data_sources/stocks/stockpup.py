@@ -401,8 +401,7 @@ class StockPup:
 			print('\nPlotting data coverage ...')
 		fig, ax = plt.subplots()#figsize=(12, 6.5))
 		fig.canvas.set_window_title(self.report_name)
-		mng = plt.get_current_fig_manager()
-		mng.resize(*mng.window.maxsize()) # go fullscreen
+		fig.canvas.manager.window.showMaximized() # go fullscreen
 		red_to_green_cmap = mcolors.LinearSegmentedColormap.from_list('', ['red', 'yellow', 'green'])
 		# colormaps: https://matplotlib.org/devdocs/tutorials/colors/colormaps.html#list-colormaps
 		plot = ax.pcolormesh(data_coverage_2D_array, cmap='RdYlGn')#'RdBu')#red_to_green_cmap)
