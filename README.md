@@ -141,6 +141,8 @@ StockPup
 			Cash change during period
 			Cash at end of period
 			Capital expenditures
+				Capital expenditures (CapEx) are funds used by a company to acquire, upgrade, and maintain physical assets such as property, plants, buildings, technology, or equipment.
+				https://www.investopedia.com/terms/c/capitalexpenditure.asp
 			Price
 			Price high
 			Price low
@@ -960,11 +962,23 @@ SimFin:
 		
 		The 61 CSV columns are:
 			Revenue
+				money generated from normal business operations
+				https://www.investopedia.com/terms/r/revenue.asp
 			Cost of Revenue
+				total cost of manufacturing and delivering a product or service to consumers
+				investopedia.com/terms/c/cost-of-revenue.asp
 			Gross Profit
+				Gross profit is the profit a company makes after deducting the costs associated with making and selling its products, or the costs associated with providing its services. Gross profit will appear on a company's income statement and can be calculated by subtracting the cost of goods sold (COGS) from revenue (sales). These figures can be found on a company's income statement. Gross profit may also be referred to as sales profit or gross income.
+				https://www.investopedia.com/terms/g/grossprofit.asp
 			Operating Expenses
+				An operating expense is an expense a business incurs through its normal business operations. Often abbreviated as OPEX, operating expenses include rent, equipment, inventory costs, marketing, payroll, insurance, step costs, and funds allocated for research and development. By contrast, a non-operating expense is an expense incurred by a business that is unrelated to the business's core operations.
+				https://www.investopedia.com/terms/o/operating_expense.asp
 			"Selling, General & Administrative"
+				Selling, general and administrative expense (SG&A) is reported on the income statement as the sum of all direct and indirect selling expenses and all general and administrative expenses (G&A) of a company. SG&A, also known as SGA, includes all the costs not directly tied to making a product or performing a service. That is, SG&A includes the costs to sell and deliver products and services and the costs to manage the company.
+				https://www.investopedia.com/terms/s/sga.asp
 			Research & Development
+				Research and development (R&D) expenses are associated directly with the research and development of a company's goods or services and any intellectual property generated in the process.
+				https://www.investopedia.com/terms/r/research-and-development-expenses.asp
 			Operating Income (Loss)
 			Non-Operating Income (Loss)
 			"Interest Expense, Net"
@@ -986,12 +1000,16 @@ SimFin:
 			Other Long Term Assets
 			Total Noncurrent Assets
 			Total Assets
+				Total assets refers to the total amount of assets owned by a person or entity
+				https://www.accountingtools.com/articles/2017/5/15/total-assets
 			Payables & Accruals
 			Short Term Debt
 			Total Current Liabilities
 			Long Term Debt
 			Total Noncurrent Liabilities
 			Total Liabilities
+				Total liabilities are the combined debts and obligations that an individual or company owes to outside parties. ... On the balance sheet, total assets minus total liabilities equals equity.
+				https://www.investopedia.com/terms/t/total-liabilities.asp
 			Share Capital & Additional Paid-In Capital
 			Treasury Stock
 			Retained Earnings

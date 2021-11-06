@@ -9,10 +9,8 @@ TO DO:
 	find good api for yahoo finance
 		or somewher that provides the data required
 
-	see if you can use flutter
-		need to connect to the api
-			if dart has like an api like python requests library it wouldn't matter what language the api was in
-		and run it locally, check
+		this?
+		https://pypi.org/project/yahoofinancials/
 
 	data required
 		dividend history
@@ -71,4 +69,4 @@ TO DO:
 		it would also be cool  if you could classify them by sector and country
 
 
-
+'''

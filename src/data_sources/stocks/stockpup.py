@@ -55,7 +55,7 @@ class StockPup:
 								Liabilities
 								Current Liabilities
 								etc ...
-									see NOTES.txt for full list and definitions
+									see README.md for full list and definitions
 		Arguments:
 			source:	string - string specifying where to get the data: valid_values: ['web', 'local']
 			verbose - boolean - print to the console if True
